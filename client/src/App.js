@@ -330,6 +330,23 @@ function App() {
     }
   };
 
+  const [selectedItems, setSelectedItems] = useState([]);
+
+  const handleSelect = (id) => {
+    const isSelected = selectedItems.includes(id);
+    if (isSelected) {
+      setSelectedItems(selectedItems.filter((itemId) => itemId !== id));
+    } else {
+      setSelectedItems([...selectedItems, id]);
+    }
+  };
+
+  const handleSendSelected = () => {
+    const selectedItemsData = scanHistory.filter((item) => selectedItems.includes(item.id));
+    console.log('Selected items:', selectedItemsData);
+    // Add code to send the selected items to the backend here
+  };
+
   return (
     <div className="App">
       <header className="App-header">
@@ -588,6 +605,11 @@ function App() {
             <div className="history-list">
               {scanHistory.map((item) => (
                 <div key={item.id} className="history-item">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedItems.includes(item.id)} 
+                    onChange={() => handleSelect(item.id)}
+                  />
                   <img src={item.image} alt={item.name} className="history-image" />
                   <div className="history-content">
                     <h4>{item.name}</h4>
@@ -603,6 +625,7 @@ function App() {
                 </div>
               ))}
             </div>
+            <button onClick={handleSendSelected}>Send Selected</button>
           </div>
         )}
         
