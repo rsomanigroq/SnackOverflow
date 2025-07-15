@@ -11,6 +11,7 @@ function App() {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true); // Voice toggle state
+  const [hideCaptureSection, setHideCaptureSection] = useState(false); // New state to control capture section visibility
   const [scanHistory, setScanHistory] = useState([]);
 
   // Effect to speak voice script when analysis results are set
@@ -36,20 +37,22 @@ function App() {
   const getFoodEmoji = (foodName) => {
     const foodNameLower = foodName.toLowerCase();
     
-    // Common fruits
+    // Common fruits - order specific terms before general ones
+    if (foodNameLower.includes('pineapple')) return '🍍';
+    if (foodNameLower.includes('strawberry')) return '🍓';
+    if (foodNameLower.includes('blueberry')) return '🫐';
+    if (foodNameLower.includes('watermelon')) return '🍉';
+    if (foodNameLower.includes('bell pepper')) return '🫑';
+    if (foodNameLower.includes('sweet potato')) return '🍠';
     if (foodNameLower.includes('banana')) return '🍌';
     if (foodNameLower.includes('apple')) return '🍎';
     if (foodNameLower.includes('orange')) return '🍊';
     if (foodNameLower.includes('grape')) return '🍇';
-    if (foodNameLower.includes('strawberry')) return '🍓';
-    if (foodNameLower.includes('blueberry')) return '🫐';
     if (foodNameLower.includes('raspberry')) return '🍓';
-    if (foodNameLower.includes('pineapple')) return '🍍';
     if (foodNameLower.includes('mango')) return '🥭';
     if (foodNameLower.includes('peach')) return '🍑';
     if (foodNameLower.includes('pear')) return '🍐';
     if (foodNameLower.includes('kiwi')) return '🥝';
-    if (foodNameLower.includes('watermelon')) return '🍉';
     if (foodNameLower.includes('melon')) return '🍈';
     if (foodNameLower.includes('cherry')) return '🍒';
     if (foodNameLower.includes('plum')) return '🫐';
@@ -235,6 +238,7 @@ function App() {
     if (!selectedImage) return;
     
     setAnalyzing(true);
+    setHideCaptureSection(true); // Hide the capture section when scan is clicked
     
     // Debug logging for the selected image
     console.log('Analyzing image:', selectedImage);
@@ -311,6 +315,7 @@ function App() {
     setPreviewUrl(null);
     setAnalysisResult(null);
     setLastSource(null);
+    setHideCaptureSection(false); // Show the capture section again when reset is called
   };
 
   const handlePreviewClick = () => {
@@ -321,6 +326,23 @@ function App() {
       // re-upload
       fileInputRef.current.click();
     }
+  };
+
+  const [selectedItems, setSelectedItems] = useState([]);
+
+  const handleSelect = (id) => {
+    const isSelected = selectedItems.includes(id);
+    if (isSelected) {
+      setSelectedItems(selectedItems.filter((itemId) => itemId !== id));
+    } else {
+      setSelectedItems([...selectedItems, id]);
+    }
+  };
+
+  const handleSendSelected = () => {
+    const selectedItemsData = scanHistory.filter((item) => selectedItems.includes(item.id));
+    console.log('Selected items:', selectedItemsData);
+    // Add code to send the selected items to the backend here
   };
 
   return (
@@ -341,7 +363,7 @@ function App() {
       <main className="App-main">
         {!showHistory ? (
           <>
-            <div className="upload-container">
+            <div className="upload-container" style={{ display: hideCaptureSection ? 'none' : 'block' }}>
               <div className="upload-area">
                 <h2>📸 Scan Your Food</h2>
                 <p>Take a photo or upload an image to get instant nutrition and quality analysis</p>
@@ -359,21 +381,6 @@ function App() {
                   >
                     📷 Camera
                   </button>
-                </div>
-
-                <div className="voice-toggle">
-                  <label className="toggle-label">
-                    <input
-                      type="checkbox"
-                      checked={voiceEnabled}
-                      onChange={(e) => setVoiceEnabled(e.target.checked)}
-                      className="toggle-input"
-                    />
-                    <span className="toggle-slider"></span>
-                    <span className="toggle-text">
-                      🔊 Audio Feedback {voiceEnabled ? 'ON' : 'OFF'}
-                    </span>
-                  </label>
                 </div>
 
                 <div className="upload-box">
@@ -432,6 +439,21 @@ function App() {
                   )}
                 </div>
 
+                <div className="voice-toggle">
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={voiceEnabled}
+                      onChange={(e) => setVoiceEnabled(e.target.checked)}
+                      className="toggle-input"
+                    />
+                    <span className="toggle-slider"></span>
+                    <span className="toggle-text">
+                      🔊 Audio Feedback {voiceEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </label>
+                </div>
+
                 {selectedImage && !analysisResult && (
                   <div className="upload-actions">
                     <button 
@@ -452,6 +474,36 @@ function App() {
                 )}
               </div>
             </div>
+
+            {analyzing && (
+              <div className="analyzing-container">
+                <div className="analyzing-content">
+                  <div className="analyzing-spinner">
+                    <div className="spinner"></div>
+                  </div>
+                  <h3>🔍 Analyzing Your Food</h3>
+                  <p>Our AI is examining your image for nutrition facts, quality assessment, and recommendations...</p>
+                  <div className="analyzing-steps">
+                    <div className="step">
+                      <span className="step-icon">📸</span>
+                      <span className="step-text">Processing image</span>
+                    </div>
+                    <div className="step">
+                      <span className="step-icon">🍎</span>
+                      <span className="step-text">Identifying food type</span>
+                    </div>
+                    <div className="step">
+                      <span className="step-icon">📊</span>
+                      <span className="step-text">Calculating nutrition</span>
+                    </div>
+                    <div className="step">
+                      <span className="step-icon">✨</span>
+                      <span className="step-text">Quality assessment</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {analysisResult && (
               <div className="analysis-container">
@@ -551,6 +603,11 @@ function App() {
             <div className="history-list">
               {scanHistory.map((item) => (
                 <div key={item.id} className="history-item">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedItems.includes(item.id)} 
+                    onChange={() => handleSelect(item.id)}
+                  />
                   <img src={item.image} alt={item.name} className="history-image" />
                   <div className="history-content">
                     <h4>{item.name}</h4>
@@ -566,6 +623,7 @@ function App() {
                 </div>
               ))}
             </div>
+            <button onClick={handleSendSelected}>Send Selected</button>
           </div>
         )}
         

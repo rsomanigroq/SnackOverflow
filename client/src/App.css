@@ -859,6 +859,117 @@
   }
   
   .analysis-header h3 {
-    font-size: 2rem;
+    font-size: 1.5rem;
+  }
+}
+
+/* Analyzing Section Styles */
+.analyzing-container {
+  max-width: 800px;
+  margin: 0 auto 4rem auto;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 3rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.analyzing-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.analyzing-spinner {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.spinner {
+  width: 100%;
+  height: 100%;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.analyzing-content h3 {
+  color: #333;
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+.analyzing-content p {
+  color: #666;
+  font-size: 1.1rem;
+  margin: 0;
+  max-width: 500px;
+}
+
+.analyzing-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 120px;
+}
+
+.step-icon {
+  font-size: 2rem;
+  opacity: 0.8;
+}
+
+.step-text {
+  font-size: 0.9rem;
+  color: #666;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Mobile responsive for analyzing section */
+@media (max-width: 768px) {
+  .analyzing-container {
+    padding: 2rem;
+    margin: 0 auto 2rem auto;
+  }
+  
+  .analyzing-content h3 {
+    font-size: 1.5rem;
+  }
+  
+  .analyzing-content p {
+    font-size: 1rem;
+  }
+  
+  .analyzing-steps {
+    gap: 1rem;
+  }
+  
+  .step {
+    min-width: 100px;
+  }
+  
+  .step-icon {
+    font-size: 1.5rem;
+  }
+  
+  .step-text {
+    font-size: 0.8rem;
   }
 } 
