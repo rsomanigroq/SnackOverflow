@@ -11,26 +11,7 @@ function App() {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true); // Voice toggle state
-  const [scanHistory, setScanHistory] = useState([
-    {
-      id: 1,
-      name: "Fresh Banana",
-      calories: 105,
-      nutrition: "High in potassium",
-      quality: "Excellent",
-      image: "/campus-eats.jpg",
-      timestamp: "2 minutes ago"
-    },
-    {
-      id: 2,
-      name: "Overripe Apple",
-      calories: 80,
-      nutrition: "Good fiber source",
-      quality: "Use soon - soft spots detected",
-      image: "/campus-eats.jpg",
-      timestamp: "5 minutes ago"
-    }
-  ]);
+  const [scanHistory, setScanHistory] = useState([]);
 
   // Effect to speak voice script when analysis results are set
   useEffect(() => {
@@ -181,6 +162,23 @@ function App() {
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Load scan history from database on component mount
+  useEffect(() => {
+    const loadScanHistory = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/analyses/recent?limit=20');
+        if (response.ok) {
+          const data = await response.json();
+          setScanHistory(data);
+        }
+      } catch (error) {
+        console.error('Error loading scan history:', error);
+      }
+    };
+
+    loadScanHistory();
+  }, []);
+
   // start/stop camera
   useEffect(() => {
     if (mode === 'camera') {
@@ -291,9 +289,9 @@ function App() {
       
       setAnalysisResult(transformedResult);
       
-      // Add to history
+      // Add to history (the backend now saves to database automatically)
       const newHistoryItem = {
-        id: Date.now(),
+        id: transformedResult.id || Date.now(),
         ...transformedResult,
         image: previewUrl,
         timestamp: "Just now"
