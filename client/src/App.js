@@ -28,6 +28,79 @@ function App() {
     }
   ]);
 
+  // Function to get emoji for food name
+  const getFoodEmoji = (foodName) => {
+    const foodNameLower = foodName.toLowerCase();
+    
+    // Common fruits
+    if (foodNameLower.includes('banana')) return '🍌';
+    if (foodNameLower.includes('apple')) return '🍎';
+    if (foodNameLower.includes('orange')) return '🍊';
+    if (foodNameLower.includes('grape')) return '🍇';
+    if (foodNameLower.includes('strawberry')) return '🍓';
+    if (foodNameLower.includes('blueberry')) return '🫐';
+    if (foodNameLower.includes('raspberry')) return '🍓';
+    if (foodNameLower.includes('pineapple')) return '🍍';
+    if (foodNameLower.includes('mango')) return '🥭';
+    if (foodNameLower.includes('peach')) return '🍑';
+    if (foodNameLower.includes('pear')) return '🍐';
+    if (foodNameLower.includes('kiwi')) return '🥝';
+    if (foodNameLower.includes('watermelon')) return '🍉';
+    if (foodNameLower.includes('melon')) return '🍈';
+    if (foodNameLower.includes('cherry')) return '🍒';
+    if (foodNameLower.includes('plum')) return '🫐';
+    
+    // Vegetables
+    if (foodNameLower.includes('carrot')) return '🥕';
+    if (foodNameLower.includes('broccoli')) return '🥦';
+    if (foodNameLower.includes('tomato')) return '🍅';
+    if (foodNameLower.includes('cucumber')) return '🥒';
+    if (foodNameLower.includes('lettuce')) return '🥬';
+    if (foodNameLower.includes('spinach')) return '🥬';
+    if (foodNameLower.includes('onion')) return '🧅';
+    if (foodNameLower.includes('garlic')) return '🧄';
+    if (foodNameLower.includes('potato')) return '🥔';
+    if (foodNameLower.includes('sweet potato')) return '🍠';
+    if (foodNameLower.includes('corn')) return '🌽';
+    if (foodNameLower.includes('pepper')) return '🫑';
+    if (foodNameLower.includes('bell pepper')) return '🫑';
+    
+    // Other foods
+    if (foodNameLower.includes('bread')) return '🍞';
+    if (foodNameLower.includes('pizza')) return '🍕';
+    if (foodNameLower.includes('burger')) return '🍔';
+    if (foodNameLower.includes('hot dog')) return '🌭';
+    if (foodNameLower.includes('taco')) return '🌮';
+    if (foodNameLower.includes('sushi')) return '🍣';
+    if (foodNameLower.includes('rice')) return '🍚';
+    if (foodNameLower.includes('pasta')) return '🍝';
+    if (foodNameLower.includes('salad')) return '🥗';
+    if (foodNameLower.includes('sandwich')) return '🥪';
+    if (foodNameLower.includes('cake')) return '🍰';
+    if (foodNameLower.includes('cookie')) return '🍪';
+    if (foodNameLower.includes('ice cream')) return '🍨';
+    if (foodNameLower.includes('chocolate')) return '🍫';
+    if (foodNameLower.includes('coffee')) return '☕';
+    if (foodNameLower.includes('tea')) return '🫖';
+    if (foodNameLower.includes('milk')) return '🥛';
+    if (foodNameLower.includes('cheese')) return '🧀';
+    if (foodNameLower.includes('egg')) return '🥚';
+    if (foodNameLower.includes('meat')) return '🥩';
+    if (foodNameLower.includes('chicken')) return '🍗';
+    if (foodNameLower.includes('fish')) return '🐟';
+    if (foodNameLower.includes('shrimp')) return '🦐';
+    
+    // Default fallback
+    return '😊';
+  };
+
+  // Function to get freshness class based on level
+  const getFreshnessClass = (freshnessLevel) => {
+    if (freshnessLevel < 3) return 'danger';
+    if (freshnessLevel < 5) return 'warning';
+    return ''; // Default green for good freshness
+  };
+
   const handleImageUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
@@ -62,6 +135,10 @@ function App() {
       
       const result = await response.json();
       
+      // Debug logging
+      console.log('Backend response:', result);
+      console.log('should_buy value:', result.should_buy, 'type:', typeof result.should_buy);
+      
       // Transform the backend response to match our frontend format
       const transformedResult = {
         name: result.fruit_name || "Food Item Detected",
@@ -71,7 +148,7 @@ function App() {
         qualityDetails: result.visual_indicators || "Standard quality assessment",
         groqPowered: true,
         freshnessLevel: result.freshness_level || 7,
-        shouldBuy: result.should_buy || true,
+        shouldBuy: result.should_buy === true, // Explicitly check for true
         bestUse: result.best_use || "Eat now",
         shelfLife: result.shelf_life_days || 3,
         healthBenefits: result.health_benefits || "Good source of nutrients",
@@ -179,7 +256,7 @@ function App() {
               <div className="analysis-container">
                 <div className="analysis-card">
                   <div className="analysis-header">
-                    <h3>🍎 {analysisResult.name}</h3>
+                    <h3>{getFoodEmoji(analysisResult.name)} {analysisResult.name}</h3>
                     <div className="groq-badge">
                       Powered by Groq
                     </div>
@@ -209,7 +286,7 @@ function App() {
                           <span>Freshness: {analysisResult.freshnessLevel}/10</span>
                           <div className="meter-bar">
                             <div 
-                              className="meter-fill" 
+                              className={`meter-fill ${getFreshnessClass(analysisResult.freshnessLevel)}`}
                               style={{width: `${(analysisResult.freshnessLevel / 10) * 100}%`}}
                             ></div>
                           </div>

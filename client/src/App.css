@@ -354,6 +354,14 @@
   transition: width 0.3s ease;
 }
 
+.meter-fill.warning {
+  background: linear-gradient(45deg, #ffc107, #ff8c00);
+}
+
+.meter-fill.danger {
+  background: linear-gradient(45deg, #dc3545, #c82333);
+}
+
 .best-use, .shelf-life {
   color: #666;
   font-size: 1rem;
