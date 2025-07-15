@@ -189,19 +189,19 @@ def parse_groq_response(response_text):
         
         # If no JSON found, create a structured response from the text
         return {
-            "fruit_name": "Food Item",
-            "freshness_level": 7,
-            "freshness_state": "Good",
-            "visual_indicators": "Standard quality assessment",
-            "should_buy": True,
-            "best_use": "Eat now",
-            "shelf_life_days": 3,
-            "calories": 100,
-            "nutrition_highlights": "Nutritional analysis complete",
-            "health_benefits": "Good source of nutrients",
-            "purchase_recommendation": "Analysis provided",
-            "storage_method": "Store in cool, dry place",
-            "food_pun": "This food is berry good for you! 🫐",
+            "fruit_name": "No food detected",
+            "freshness_level": 0,
+            "freshness_state": "Unable to assess",
+            "visual_indicators": "No clear food item identified in the image",
+            "should_buy": False,
+            "best_use": "Unable to determine",
+            "shelf_life_days": 0,
+            "calories": 0,
+            "nutrition_highlights": "No nutritional information available",
+            "health_benefits": "No food item identified",
+            "purchase_recommendation": "No food detected - please try with a clearer image",
+            "storage_method": "Not applicable",
+            "food_pun": None,
             "raw_analysis": response_text
         }
         
@@ -209,21 +209,108 @@ def parse_groq_response(response_text):
         print(f"JSON parsing error: {e}")
         # Return structured data with the raw response
         return {
-            "fruit_name": "Food Item",
-            "freshness_level": 7,
-            "freshness_state": "Good",
-            "visual_indicators": "Standard quality assessment",
-            "should_buy": True,
-            "best_use": "Eat now",
-            "shelf_life_days": 3,
-            "calories": 100,
-            "nutrition_highlights": "Nutritional analysis complete",
-            "health_benefits": "Good source of nutrients",
-            "purchase_recommendation": "Analysis provided",
-            "storage_method": "Store in cool, dry place",
-            "food_pun": "This food is berry good for you! 🫐",
+            "fruit_name": "No food detected",
+            "freshness_level": 0,
+            "freshness_state": "Unable to assess",
+            "visual_indicators": "No clear food item identified in the image",
+            "should_buy": False,
+            "best_use": "Unable to determine",
+            "shelf_life_days": 0,
+            "calories": 0,
+            "nutrition_highlights": "No nutritional information available",
+            "health_benefits": "No food item identified",
+            "purchase_recommendation": "No food detected - please try with a clearer image",
+            "storage_method": "Not applicable",
+            "food_pun": None,
             "raw_analysis": response_text
         }
+
+def generate_recipes_with_groq(selected_foods, groq_api_key):
+    """Generate recipes using Groq based on selected food items"""
+    
+    # Initialize Groq client
+    client = Groq(api_key=groq_api_key)
+    
+    try:
+        # Create a detailed prompt for recipe generation
+        food_details = []
+        for food in selected_foods:
+            food_details.append(f"""
+- {food['name']} (Freshness: {food['quality']}, Calories: {food['calories']}, 
+  Nutrition: {food['nutrition']}, Best Use: {food['bestUse']}, 
+  Shelf Life: {food['shelfLife']} days)
+""")
+        
+        food_list = "\n".join(food_details)
+        
+        # Create chat completion for recipe generation
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Based on these food items from my recent scans, generate 3 creative and practical recipes:
+
+{food_list}
+
+Please provide a JSON response with the following structure:
+
+{{
+  "recipes": [
+    {{
+      "name": "Recipe Name",
+      "description": "Brief description of the recipe",
+      "ingredients": [
+        {{
+          "item": "Food item name",
+          "amount": "Quantity needed",
+          "notes": "Any special preparation notes"
+        }}
+      ],
+      "instructions": [
+        "Step 1",
+        "Step 2",
+        "Step 3"
+      ],
+      "cooking_time": "15 minutes",
+      "difficulty": "Easy/Medium/Hard",
+      "calories_per_serving": 250,
+      "servings": 2,
+      "tips": "Helpful cooking tips",
+      "why_this_recipe": "Why this recipe works well with these ingredients"
+    }}
+  ],
+  "summary": {{
+    "total_calories": 750,
+    "nutrition_benefits": "Combined nutritional benefits",
+    "freshness_considerations": "How to use ingredients based on their freshness"
+  }}
+}}
+
+IMPORTANT GUIDELINES:
+- Consider the freshness state of ingredients (use fresher items first)
+- Account for shelf life when planning cooking order
+- Make recipes practical and achievable
+- Include any additional common ingredients needed
+- Focus on healthy, nutritious combinations
+- Consider dietary restrictions and preferences
+- Make instructions clear and step-by-step
+
+Respond ONLY with valid JSON. Do not include any text before or after the JSON object."""
+                }
+            ],
+            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            temperature=0.3,
+            max_tokens=2000,
+        )
+        
+        response_content = chat_completion.choices[0].message.content
+        print(f"Raw Groq response: {response_content[:500]}...")  # Log first 500 chars
+        
+        return response_content
+        
+    except Exception as e:
+        print(f"Error with Groq API for recipe generation: {e}")
+        return None
 
 @app.route('/analyze', methods=['POST'])
 def analyze_food():
@@ -411,6 +498,98 @@ def generate_audio_from_text():
                 
     except Exception as e:
         print(f"Server error: {str(e)}")
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/generate-recipes', methods=['POST'])
+def generate_recipes():
+    """API endpoint to generate recipes based on selected food items"""
+    try:
+        # Get JSON data from request
+        data = request.get_json()
+        if not data or 'selectedFoods' not in data:
+            return jsonify({'error': 'No selected foods provided'}), 400
+        
+        selected_foods = data['selectedFoods']
+        
+        if not selected_foods or len(selected_foods) == 0:
+            return jsonify({'error': 'No food items selected'}), 400
+        
+        # Get API key from environment variable
+        api_key = os.getenv('GROQ_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'GROQ_API_KEY not configured'}), 500
+        
+        print(f"🍳 Generating recipes for {len(selected_foods)} selected foods...")
+        
+        # Generate recipes using Groq
+        result = generate_recipes_with_groq(selected_foods, api_key)
+        
+        if result:
+            print(f"Recipe generation response: {result[:200]}...")  # Log first 200 chars
+            
+            # Parse the response
+            try:
+                # Try to find JSON in the response
+                response_text = result.strip()
+                
+                # If it starts and ends with curly braces, try to parse as JSON
+                if response_text.startswith('{') and response_text.endswith('}'):
+                    parsed_result = json.loads(response_text)
+                    return jsonify(parsed_result)
+                
+                # If not, try to extract JSON from the text
+                start_idx = response_text.find('{')
+                end_idx = response_text.rfind('}')
+                
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_str = response_text[start_idx:end_idx + 1]
+                    parsed_result = json.loads(json_str)
+                    return jsonify(parsed_result)
+                
+                # If no JSON found, create a fallback response
+                print("No valid JSON found in response, creating fallback")
+                fallback_result = {
+                    "recipes": [
+                        {
+                            "name": "Simple Recipe",
+                            "description": "A simple recipe using your selected ingredients",
+                            "ingredients": [
+                                {
+                                    "item": "Selected ingredients",
+                                    "amount": "As available",
+                                    "notes": "Use based on freshness"
+                                }
+                            ],
+                            "instructions": [
+                                "Wash and prepare your ingredients",
+                                "Combine ingredients in a bowl",
+                                "Serve fresh and enjoy!"
+                            ],
+                            "cooking_time": "10 minutes",
+                            "difficulty": "Easy",
+                            "calories_per_serving": 200,
+                            "servings": 2,
+                            "tips": "Use freshest ingredients first",
+                            "why_this_recipe": "Simple preparation to preserve nutrients"
+                        }
+                    ],
+                    "summary": {
+                        "total_calories": 400,
+                        "nutrition_benefits": "Fresh ingredients provide essential nutrients",
+                        "freshness_considerations": "Use ingredients based on their freshness level"
+                    }
+                }
+                return jsonify(fallback_result)
+                
+            except json.JSONDecodeError as e:
+                print(f"Error parsing recipe JSON: {e}")
+                print(f"Full response: {result}")
+                return jsonify({'error': 'Failed to parse recipe response'}), 500
+        else:
+            return jsonify({'error': 'Failed to generate recipes'}), 500
+            
+    except Exception as e:
+        print(f"Server error in recipe generation: {str(e)}")
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/health', methods=['GET'])
