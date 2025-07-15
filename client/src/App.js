@@ -10,6 +10,7 @@ function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true); // Voice toggle state
   const [scanHistory, setScanHistory] = useState([
     {
       id: 1,
@@ -30,6 +31,25 @@ function App() {
       timestamp: "5 minutes ago"
     }
   ]);
+
+  // Effect to speak voice script when analysis results are set
+  useEffect(() => {
+    if (analysisResult && voiceEnabled) {
+      // Create voice script from analysis result
+      const voiceScript = createVoiceScript(
+        analysisResult.name, 
+        analysisResult.nutrition, 
+        analysisResult.purchaseRecommendation
+      );
+      
+      // Small delay to ensure UI is updated first
+      const timer = setTimeout(() => {
+        speakVoiceScript(voiceScript);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [analysisResult, voiceEnabled]);
 
   // Function to get emoji for food name
   const getFoodEmoji = (foodName) => {
@@ -102,6 +122,59 @@ function App() {
     if (freshnessLevel < 3) return 'danger';
     if (freshnessLevel < 5) return 'warning';
     return ''; // Default green for good freshness
+  };
+
+  // Function to create voice script for debugging
+  const createVoiceScript = (fruitName, nutrition, recommendation) => {
+    const fruit = fruitName || "this food";
+    const nutritionInfo = nutrition || "good source of nutrients";
+    const rec = recommendation || "analysis complete";
+    
+    // Create a natural-sounding script
+    return `This looks like ${fruit.toLowerCase()} - ${nutritionInfo.toLowerCase()}. ${rec.toLowerCase()}.`;
+  };
+
+  // Function to speak the voice script using Groq TTS
+  const speakVoiceScript = async (text) => {
+    try {
+      console.log('🎤 Generating audio for:', text);
+      
+      // Call a new backend endpoint that generates audio from text
+      const response = await fetch('http://localhost:5000/generate-audio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.audio_file) {
+        console.log('🔊 Audio generated:', result.audio_file);
+        // The backend will handle playing the audio
+        console.log('✅ Audio playback completed by backend');
+      } else {
+        console.log('❌ No audio file generated');
+      }
+      
+    } catch (error) {
+      console.error('Error generating audio:', error);
+      // Fallback to browser speech synthesis
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        utterance.volume = 0.8;
+        window.speechSynthesis.speak(utterance);
+        console.log('🔊 Fallback: Using browser speech synthesis');
+      }
+    }
   };
 
   const videoRef = useRef(null);
@@ -212,7 +285,8 @@ function App() {
         shelfLife: result.shelf_life_days || 3,
         healthBenefits: result.health_benefits || "Good source of nutrients",
         purchaseRecommendation: result.purchase_recommendation || "Good choice",
-        storageMethod: result.storage_method || "Store in cool, dry place"
+        storageMethod: result.storage_method || "Store in cool, dry place",
+        foodPun: result.food_pun || null
       };
       
       setAnalysisResult(transformedResult);
@@ -287,6 +361,21 @@ function App() {
                   >
                     📷 Camera
                   </button>
+                </div>
+
+                <div className="voice-toggle">
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={voiceEnabled}
+                      onChange={(e) => setVoiceEnabled(e.target.checked)}
+                      className="toggle-input"
+                    />
+                    <span className="toggle-slider"></span>
+                    <span className="toggle-text">
+                      🔊 Audio Feedback {voiceEnabled ? 'ON' : 'OFF'}
+                    </span>
+                  </label>
                 </div>
 
                 <div className="upload-box">
@@ -423,6 +512,12 @@ function App() {
                     <div className={`purchase-recommendation ${analysisResult.shouldBuy ? 'buy' : 'skip'}`}>
                       {analysisResult.shouldBuy ? '✅ Buy' : '❌ Skip'}: {analysisResult.purchaseRecommendation}
                     </div>
+                    
+                    {analysisResult.shouldBuy && analysisResult.foodPun && (
+                      <div className="food-pun">
+                        <p>😄 {analysisResult.foodPun}</p>
+                      </div>
+                    )}
                     
                     {analysisResult.storageMethod && (
                       <div className="storage-info">
