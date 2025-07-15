@@ -391,13 +391,29 @@ function App() {
 
   return (
     <div className="App">
+      {/* Floating particles background */}
+      <div className="floating-particles">
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+      </div>
+
       <header className="App-header">
         <div className="header-left">
-          <h1>🍌 SnackOverflow</h1>
-          <p>Real-time food analysis powered by Groq</p>
+          <div className="header-logo">🍎</div>
+          <div>
+            <h1>SnackOverflow</h1>
+            <p>AI-Powered Food Analysis & Quality Assessment</p>
+          </div>
         </div>
-        <button 
-          className="history-button"
+        <button
+          className="history-button glow-effect"
           onClick={() => setShowHistory(!showHistory)}
         >
           📋 {showHistory ? 'Hide' : 'Show'} History
@@ -459,7 +475,7 @@ function App() {
                         </div>
                       ) : (
                         <label htmlFor="image-upload" className="upload-label">
-                          <div className="upload-placeholder">
+                          <div className="upload-placeholder glow-effect">
                             <div className="upload-icon">📸</div>
                             <p>Click to upload food image</p>
                             <p className="upload-hint">Supports: JPG, PNG, GIF</p>
@@ -523,10 +539,18 @@ function App() {
               <div className="analyzing-container">
                 <div className="analyzing-content">
                   <div className="analyzing-spinner">
-                    <div className="spinner"></div>
+                    <svg className="progress-ring" viewBox="0 0 100 100">
+                      <circle className="bg" cx="50" cy="50" r="40"></circle>
+                      <circle className="progress" cx="50" cy="50" r="40"></circle>
+                    </svg>
                   </div>
                   <h3>🔍 Analyzing Your Food</h3>
                   <p>Our AI is examining your image for nutrition facts, quality assessment, and recommendations...</p>
+                  <div className="loading-dots">
+                    <div className="loading-dot"></div>
+                    <div className="loading-dot"></div>
+                    <div className="loading-dot"></div>
+                  </div>
                   <div className="analyzing-steps">
                     <div className="step">
                       <span className="step-icon">📸</span>
@@ -553,8 +577,8 @@ function App() {
               <div className="analysis-container">
                 <div className="analysis-card">
                   <div className="analysis-header">
-                    <h3>{getFoodEmoji(analysisResult.name)} {analysisResult.name}</h3>
-                    <div className="groq-badge">
+                    <h3><span className="food-emoji">{getFoodEmoji(analysisResult.name)}</span> {analysisResult.name}</h3>
+                    <div className="groq-badge quality-pulse">
                       Powered by Groq
                     </div>
                   </div>
@@ -683,15 +707,6 @@ function App() {
               <div className="recipes-container">
                 <h3>🍽️ Generated Recipes</h3>
                 
-                {recipes.summary && (
-                  <div className="recipe-summary">
-                    <h4>📊 Recipe Summary</h4>
-                    <p><strong>Total Calories:</strong> {recipes.summary.total_calories}</p>
-                    <p><strong>Nutrition Benefits:</strong> {recipes.summary.nutrition_benefits}</p>
-                    <p><strong>Freshness Considerations:</strong> {recipes.summary.freshness_considerations}</p>
-                  </div>
-                )}
-                
                 <div className="recipes-list">
                   {recipes.recipes && recipes.recipes.map((recipe, index) => (
                     <div key={index} className="recipe-card">
@@ -704,6 +719,15 @@ function App() {
                           <span className="calories">🔥 {recipe.calories_per_serving} cal/serving</span>
                         </div>
                       </div>
+                      
+                      {recipe.summary && (
+                        <div className="recipe-summary">
+                          <h4>📊 Recipe Summary</h4>
+                          <p><strong>Total Calories:</strong> {recipe.summary.total_calories}</p>
+                          <p><strong>Nutrition Benefits:</strong> {recipe.summary.nutrition_benefits}</p>
+                          <p><strong>Freshness Considerations:</strong> {recipe.summary.freshness_considerations}</p>
+                        </div>
+                      )}
                       
                       <p className="recipe-description">{recipe.description}</p>
                       
@@ -766,7 +790,7 @@ function App() {
       </main>
 
       <footer className="App-footer">
-        <p>&copy; 2024 SnackOverflow. Real-time quality assessment powered by Groq 🚀</p>
+        <p>&copy; 2025 SnackOverflow. Real-time quality assessment powered by Groq 🚀</p>
       </footer>
     </div>
   );
