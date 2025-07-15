@@ -45,52 +45,57 @@ function App() {
     
     setAnalyzing(true);
     
-    // Simulate AI analysis with different results based on file name
-    setTimeout(() => {
-      const fileName = selectedImage.name.toLowerCase();
-      let result;
+    try {
+      // Create FormData to send the image file
+      const formData = new FormData();
+      formData.append('image', selectedImage);
       
-      if (fileName.includes('banana')) {
-        result = {
-          name: "Fresh Banana",
-          calories: 105,
-          nutrition: "High in potassium",
-          quality: "Excellent",
-          qualityDetails: "Perfect ripeness, no blemishes detected",
-          groqPowered: true
-        };
-      } else if (fileName.includes('apple')) {
-        result = {
-          name: "Overripe Apple",
-          calories: 80,
-          nutrition: "Good fiber source",
-          quality: "Use soon - soft spots detected",
-          qualityDetails: "Soft spots detected, consume within 24 hours",
-          groqPowered: true
-        };
-      } else {
-        result = {
-          name: "Food Item Detected",
-          calories: Math.floor(Math.random() * 200) + 50,
-          nutrition: "Nutritional analysis complete",
-          quality: "Good condition",
-          qualityDetails: "Standard quality assessment",
-          groqPowered: true
-        };
+      // Call the backend API
+      const response = await fetch('http://localhost:5000/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      setAnalysisResult(result);
-      setAnalyzing(false);
+      const result = await response.json();
+      
+      // Transform the backend response to match our frontend format
+      const transformedResult = {
+        name: result.fruit_name || "Food Item Detected",
+        calories: result.calories || Math.floor(Math.random() * 200) + 50,
+        nutrition: result.nutrition_highlights || "Nutritional analysis complete",
+        quality: result.freshness_state || "Good condition",
+        qualityDetails: result.visual_indicators || "Standard quality assessment",
+        groqPowered: true,
+        freshnessLevel: result.freshness_level || 7,
+        shouldBuy: result.should_buy || true,
+        bestUse: result.best_use || "Eat now",
+        shelfLife: result.shelf_life_days || 3,
+        healthBenefits: result.health_benefits || "Good source of nutrients",
+        purchaseRecommendation: result.purchase_recommendation || "Good choice",
+        storageMethod: result.storage_method || "Store in cool, dry place"
+      };
+      
+      setAnalysisResult(transformedResult);
       
       // Add to history
       const newHistoryItem = {
         id: Date.now(),
-        ...result,
+        ...transformedResult,
         image: previewUrl,
         timestamp: "Just now"
       };
       setScanHistory([newHistoryItem, ...scanHistory]);
-    }, 2000);
+      
+    } catch (error) {
+      console.error('Error analyzing food:', error);
+      alert('Error analyzing food. Please try again.');
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const resetAnalysis = () => {
@@ -102,8 +107,10 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>🍌 SnackOverflow</h1>
-        <p>Real-time food analysis powered by Groq</p>
+        <div className="header-left">
+          <h1>🍌 SnackOverflow</h1>
+          <p>Real-time food analysis powered by Groq</p>
+        </div>
         <button 
           className="history-button"
           onClick={() => setShowHistory(!showHistory)}
@@ -185,15 +192,53 @@ function App() {
                         <span className="calorie-label">calories</span>
                       </div>
                       <p className="nutrition-text">{analysisResult.nutrition}</p>
+                      {analysisResult.healthBenefits && (
+                        <p className="health-benefits">💚 {analysisResult.healthBenefits}</p>
+                      )}
                     </div>
                     
                     <div className="quality-info">
                       <h4>Quality Assessment</h4>
-                      <div className={`quality-badge ${analysisResult.quality.includes('Excellent') ? 'excellent' : 'warning'}`}>
+                      <div className={`quality-badge ${analysisResult.quality.includes('Fresh') || analysisResult.quality.includes('Excellent') ? 'excellent' : 'warning'}`}>
                         {analysisResult.quality}
                       </div>
                       <p className="quality-details">{analysisResult.qualityDetails}</p>
+                      
+                      {analysisResult.freshnessLevel && (
+                        <div className="freshness-meter">
+                          <span>Freshness: {analysisResult.freshnessLevel}/10</span>
+                          <div className="meter-bar">
+                            <div 
+                              className="meter-fill" 
+                              style={{width: `${(analysisResult.freshnessLevel / 10) * 100}%`}}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {analysisResult.bestUse && (
+                        <p className="best-use">🍽️ Best use: {analysisResult.bestUse}</p>
+                      )}
+                      
+                      {analysisResult.shelfLife && (
+                        <p className="shelf-life">📅 Shelf life: {analysisResult.shelfLife} days</p>
+                      )}
                     </div>
+                  </div>
+                  
+                  {/* Purchase Recommendation Section */}
+                  <div className="purchase-recommendation-section">
+                    <h4>🛒 Purchase Recommendation</h4>
+                    <div className={`purchase-recommendation ${analysisResult.shouldBuy ? 'buy' : 'skip'}`}>
+                      {analysisResult.shouldBuy ? '✅ Buy' : '❌ Skip'}: {analysisResult.purchaseRecommendation}
+                    </div>
+                    
+                    {analysisResult.storageMethod && (
+                      <div className="storage-info">
+                        <h5>📦 Storage Method</h5>
+                        <p>{analysisResult.storageMethod}</p>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="analysis-actions">
@@ -229,7 +274,7 @@ function App() {
                       <span className="calories">{item.calories} cal</span>
                       <span className="nutrition">{item.nutrition}</span>
                     </div>
-                    <div className={`quality-indicator ${item.quality.includes('Excellent') ? 'excellent' : 'warning'}`}>
+                    <div className={`quality-indicator ${item.quality.includes('Fresh') || item.quality.includes('Excellent') ? 'excellent' : 'warning'}`}>
                       {item.quality}
                     </div>
                     <span className="timestamp">{item.timestamp}</span>
