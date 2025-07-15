@@ -60,21 +60,29 @@ cd SnackOverflow
 
 ### 2. Backend Setup
 ```bash
-# Install Python dependencies
+# Install Python dependencies (make sure you're in the project root)
 pip install -r requirements.txt
 
-# Navigate to backend directory
+# Create .env file in backend directory with your credentials
 cd backend
+cat > .env << 'EOF'
+# MySQL Database Configuration
+MYSQL_HOST=localhost
+MYSQL_USER=root
+MYSQL_PASSWORD=your_mysql_password_here
+MYSQL_DB=snackoverflow
+MYSQL_PORT=3306
+
+# Groq AI API Configuration  
+GROQ_API_KEY=your_groq_api_key_here
+EOF
+
+# Edit the .env file with your actual credentials:
+# - Set MYSQL_PASSWORD to your MySQL root password
+# - Get a Groq API key from groq.com and set GROQ_API_KEY
 
 # Run database setup script
 python setup_database.py
-
-# Edit .env file with your credentials
-# MYSQL_HOST=localhost
-# MYSQL_USER=root
-# MYSQL_PASSWORD=your_password
-# MYSQL_DB=snackoverflow
-# GROQ_API_KEY=your_groq_api_key
 ```
 
 ### 3. Frontend Setup
@@ -88,14 +96,16 @@ npm install
 
 ### 4. Start the Application
 ```bash
-# Terminal 1: Start Flask backend
+# Terminal 1: Start Flask backend (from project root)
 cd backend
 python api.py
 
-# Terminal 2: Start React frontend
+# Terminal 2: Start React frontend (from project root)
 cd client
 npm start
 ```
+
+**Important**: Always run `python api.py` from within the `backend/` directory, not from the project root.
 
 The application will be available at:
 - **Frontend**: http://localhost:3000
@@ -164,6 +174,27 @@ Test images are available in `backend/img/`:
 
 MIT License - see LICENSE file for details
 
+## Troubleshooting
+
+### Common Issues
+
+1. **"can't open file api.py"**: Make sure you run `python api.py` from inside the `backend/` directory, not from the project root.
+
+2. **Database Connection Errors**: 
+   - Verify MySQL is running: `brew services start mysql` (macOS) or `sudo systemctl start mysql` (Linux)
+   - Check your `.env` file has the correct MySQL password
+   - Test connection: `mysql -u root -p`
+
+3. **Missing Groq API Key**: 
+   - Sign up at [groq.com](https://groq.com) to get your API key
+   - Add it to `backend/.env` as `GROQ_API_KEY=your_key_here`
+
+4. **Port Already in Use**:
+   - Frontend (3000): `lsof -ti:3000 | xargs kill -9`
+   - Backend (5000): `lsof -ti:5000 | xargs kill -9`
+
+5. **Node.js Version Warnings**: The Jest warnings about Node.js v23 are safe to ignore - the app will work fine.
+
 ## Support
 
 For setup issues, check:
@@ -171,6 +202,7 @@ For setup issues, check:
 2. **API Keys**: Ensure Groq API key is valid and set in `.env`
 3. **Dependencies**: Run `pip install -r requirements.txt` and `npm install`
 4. **Ports**: Default ports are 3000 (frontend) and 5000 (backend)
+5. **Working Directory**: Always run `python api.py` from the `backend/` directory
 
 ---
 
