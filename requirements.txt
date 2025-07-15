@@ -2,3 +2,5 @@ groq
 python-dotenv
 flask
 flask-cors
+dotenv
+requests
