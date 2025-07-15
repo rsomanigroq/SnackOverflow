@@ -8,12 +8,16 @@ from groq import Groq
 from dotenv import load_dotenv
 import subprocess
 import platform
+from database import create_tables, save_food_analysis, get_recent_analyses
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend integration
+
+# Initialize database tables on startup
+create_tables()
 
 def encode_image_to_base64(image_path):
     """Convert image file to base64 string"""
@@ -257,6 +261,22 @@ def analyze_food():
                 
                 print(f"Parsed result: {parsed_result}")
                 
+                # Convert image to base64 for storage
+                image_base64 = None
+                try:
+                    with open(temp_path, "rb") as image_file:
+                        image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+                except Exception as e:
+                    print(f"Error converting image to base64: {e}")
+                
+                # Save to database
+                db_id = save_food_analysis(parsed_result, file.filename, image_base64)
+                if db_id:
+                    parsed_result['id'] = db_id
+                    print(f"✅ Analysis saved to database with ID: {db_id}")
+                else:
+                    print("⚠️ Failed to save to database, but analysis completed")
+                
                 return jsonify(parsed_result)
             else:
                 return jsonify({'error': 'Failed to analyze image'}), 500
@@ -397,6 +417,58 @@ def generate_audio_from_text():
 def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'message': 'SnackOverflow API is running'})
+
+@app.route('/analyses/recent', methods=['GET'])
+def get_recent_food_analyses():
+    """Get recent food analyses from database"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        analyses = get_recent_analyses(limit)
+        
+        # Format for frontend
+        formatted_analyses = []
+        for analysis in analyses:
+            # Calculate time ago
+            from datetime import datetime
+            created_at = analysis['created_at']
+            if isinstance(created_at, str):
+                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            
+            time_diff = datetime.now() - created_at
+            minutes = int(time_diff.total_seconds() / 60)
+            hours = int(minutes / 60)
+            days = int(hours / 24)
+            
+            if days > 0:
+                time_ago = f"{days} days ago"
+            elif hours > 0:
+                time_ago = f"{hours} hours ago"
+            else:
+                time_ago = f"{minutes} minutes ago"
+            
+            formatted_analysis = {
+                'id': analysis['id'],
+                'name': analysis['fruit_name'],
+                'calories': analysis['calories'],
+                'nutrition': analysis['nutrition_highlights'],
+                'quality': analysis['freshness_state'],
+                'image': f"data:image/jpeg;base64,{analysis['image_data']}" if analysis['image_data'] else None,
+                'timestamp': time_ago,
+                'shouldBuy': analysis['should_buy'],
+                'bestUse': analysis['best_use'],
+                'shelfLife': analysis['shelf_life_days'],
+                'healthBenefits': analysis['health_benefits'],
+                'purchaseRecommendation': analysis['purchase_recommendation'],
+                'storageMethod': analysis['storage_method'],
+                'foodPun': analysis['food_pun']
+            }
+            formatted_analyses.append(formatted_analysis)
+        
+        return jsonify(formatted_analyses)
+        
+    except Exception as e:
+        print(f"Error fetching recent analyses: {e}")
+        return jsonify({'error': 'Failed to fetch analyses'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000) 

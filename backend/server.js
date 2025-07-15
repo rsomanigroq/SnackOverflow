@@ -54,6 +54,7 @@ app.post('/analyze', upload.single('image'), async (req, res) => {
             {
               type: "text",
               text: `Analyze this food image and provide a JSON response with the following structure:
+
 {
   "fruit_name": "Name of the food item",
   "freshness_level": 8,
@@ -66,10 +67,15 @@ app.post('/analyze', upload.single('image'), async (req, res) => {
   "nutrition_highlights": "Key vitamins and minerals",
   "health_benefits": "Notable health benefits",
   "purchase_recommendation": "Buy/Skip with reasoning",
-  "storage_method": "Best storage method after purchase"
+  "storage_method": "Best storage method after purchase",
+  "food_pun": "A clever pun using the food name (only if should_buy is true, otherwise null)"
 }
 
-IMPORTANT: Respond ONLY with valid JSON.`
+IMPORTANT: 
+- Respond ONLY with valid JSON. Do not include any text before or after the JSON object.
+- If should_buy is true, include a clever pun using the food name in the food_pun field.
+- If should_buy is false, set food_pun to null.
+- Make the puns fun and food-related!`
             },
             {
               type: "image_url",
@@ -88,12 +94,12 @@ IMPORTANT: Respond ONLY with valid JSON.`
     const analysis = JSON.parse(result.choices[0].message.content);
     
     // Save to database
-    const [result] = await pool.execute(
+    const [dbResult] = await pool.execute(
       `INSERT INTO food_analyses (
         fruit_name, freshness_level, freshness_state, visual_indicators,
         should_buy, best_use, shelf_life_days, calories, nutrition_highlights,
-        health_benefits, purchase_recommendation, storage_method, image_filename, image_data
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        health_benefits, purchase_recommendation, storage_method, food_pun, image_filename, image_data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         analysis.fruit_name,
         analysis.freshness_level,
@@ -107,12 +113,13 @@ IMPORTANT: Respond ONLY with valid JSON.`
         analysis.health_benefits,
         analysis.purchase_recommendation,
         analysis.storage_method,
+        analysis.food_pun || null,
         req.file.originalname,
         imageBase64
       ]
     );
 
-    analysis.id = result.insertId;
+    analysis.id = dbResult.insertId;
     res.json(analysis);
 
   } catch (error) {
@@ -125,8 +132,7 @@ app.get('/analyses/recent', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     const [rows] = await pool.execute(
-      `SELECT * FROM food_analyses ORDER BY created_at DESC LIMIT ?`,
-      [limit]
+      `SELECT * FROM food_analyses ORDER BY created_at DESC LIMIT ${limit}`
     );
     
     // Format for frontend
@@ -148,7 +154,14 @@ app.get('/analyses/recent', async (req, res) => {
         nutrition: row.nutrition_highlights,
         quality: row.freshness_state,
         image: row.image_data ? `data:image/jpeg;base64,${row.image_data}` : null,
-        timestamp: timeAgo
+        timestamp: timeAgo,
+        shouldBuy: row.should_buy,
+        bestUse: row.best_use,
+        shelfLife: row.shelf_life_days,
+        healthBenefits: row.health_benefits,
+        purchaseRecommendation: row.purchase_recommendation,
+        storageMethod: row.storage_method,
+        foodPun: row.food_pun
       };
     });
     
