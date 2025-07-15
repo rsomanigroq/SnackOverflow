@@ -298,15 +298,6 @@ function App() {
       
       setAnalysisResult(transformedResult);
       
-      // Add to history (the backend now saves to database automatically)
-      const newHistoryItem = {
-        id: transformedResult.id || Date.now(),
-        ...transformedResult,
-        image: previewUrl,
-        timestamp: "Just now"
-      };
-      setScanHistory([newHistoryItem, ...scanHistory]);
-      
     } catch (error) {
       console.error('Error analyzing food:', error);
       alert('Error analyzing food. Please try again.');
@@ -546,11 +537,6 @@ function App() {
                   </div>
                   <h3>🔍 Analyzing Your Food</h3>
                   <p>Our AI is examining your image for nutrition facts, quality assessment, and recommendations...</p>
-                  <div className="loading-dots">
-                    <div className="loading-dot"></div>
-                    <div className="loading-dot"></div>
-                    <div className="loading-dot"></div>
-                  </div>
                   <div className="analyzing-steps">
                     <div className="step">
                       <span className="step-icon">📸</span>
@@ -649,10 +635,18 @@ function App() {
                     <button 
                       className="save-button"
                       onClick={() => {
-                        alert('Saved to your food diary! 📝');
+                        // Save the current analysis result to history
+                        const newHistoryItem = {
+                          id: Date.now(),
+                          ...analysisResult,
+                          image: previewUrl,
+                          timestamp: "Just now"
+                        };
+                        setScanHistory([newHistoryItem, ...scanHistory]);
+                        alert('Saved to your cupboard! 🥫');
                       }}
                     >
-                      Save to Diary
+                      Save to Cupboard
                     </button>
                     <button 
                       className="scan-again-button"
