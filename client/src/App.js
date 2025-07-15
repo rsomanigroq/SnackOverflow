@@ -13,6 +13,8 @@ function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(true); // Voice toggle state
   const [hideCaptureSection, setHideCaptureSection] = useState(false); // New state to control capture section visibility
   const [scanHistory, setScanHistory] = useState([]);
+  const [recipes, setRecipes] = useState(null);
+  const [generatingRecipes, setGeneratingRecipes] = useState(false);
 
   // Effect to speak voice script when analysis results are set
   useEffect(() => {
@@ -36,6 +38,9 @@ function App() {
   // Function to get emoji for food name
   const getFoodEmoji = (foodName) => {
     const foodNameLower = foodName.toLowerCase();
+    
+    // Check for no food detected case
+    if (foodNameLower.includes('no food detected')) return '❓';
     
     // Common fruits - order specific terms before general ones
     if (foodNameLower.includes('pineapple')) return '🍍';
@@ -275,16 +280,16 @@ function App() {
       
       // Transform the backend response to match our frontend format
       const transformedResult = {
-        name: result.fruit_name || "Food Item Detected",
-        calories: result.calories || Math.floor(Math.random() * 200) + 50,
+        name: result.fruit_name || "No food detected",
+        calories: result.fruit_name === "No food detected" ? 0 : (result.calories || Math.floor(Math.random() * 200) + 50),
         nutrition: result.nutrition_highlights || "Nutritional analysis complete",
         quality: result.freshness_state || "Good condition",
         qualityDetails: result.visual_indicators || "Standard quality assessment",
         groqPowered: true,
-        freshnessLevel: result.freshness_level || 7,
+        freshnessLevel: result.fruit_name === "No food detected" ? 0 : (result.freshness_level || 7),
         shouldBuy: result.should_buy === true, // Explicitly check for true
         bestUse: result.best_use || "Eat now",
-        shelfLife: result.shelf_life_days || 3,
+        shelfLife: result.fruit_name === "No food detected" ? 0 : (result.shelf_life_days || 3),
         healthBenefits: result.health_benefits || "Good source of nutrients",
         purchaseRecommendation: result.purchase_recommendation || "Good choice",
         storageMethod: result.storage_method || "Store in cool, dry place",
@@ -336,6 +341,45 @@ function App() {
       setSelectedItems(selectedItems.filter((itemId) => itemId !== id));
     } else {
       setSelectedItems([...selectedItems, id]);
+    }
+  };
+
+  const generateRecipes = async () => {
+    const selectedItemsData = scanHistory.filter((item) => selectedItems.includes(item.id));
+    
+    if (selectedItemsData.length === 0) {
+      alert('Please select at least one food item to generate recipes!');
+      return;
+    }
+    
+    setGeneratingRecipes(true);
+    
+    try {
+      console.log('🍳 Generating recipes for:', selectedItemsData);
+      
+      const response = await fetch('http://localhost:5000/generate-recipes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          selectedFoods: selectedItemsData
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      setRecipes(result);
+      console.log('✅ Recipes generated:', result);
+      
+    } catch (error) {
+      console.error('Error generating recipes:', error);
+      alert('Failed to generate recipes. Please try again.');
+    } finally {
+      setGeneratingRecipes(false);
     }
   };
 
@@ -623,7 +667,85 @@ function App() {
                 </div>
               ))}
             </div>
-            <button onClick={handleSendSelected}>Send Selected</button>
+            
+            <div className="history-actions">
+              <button 
+                className="generate-recipes-button"
+                onClick={generateRecipes}
+                disabled={generatingRecipes || selectedItems.length === 0}
+              >
+                {generatingRecipes ? '🍳 Generating Recipes...' : '🍳 Generate Recipes'}
+              </button>
+              <button onClick={handleSendSelected}>Send Selected</button>
+            </div>
+
+            {recipes && (
+              <div className="recipes-container">
+                <h3>🍽️ Generated Recipes</h3>
+                
+                {recipes.summary && (
+                  <div className="recipe-summary">
+                    <h4>📊 Recipe Summary</h4>
+                    <p><strong>Total Calories:</strong> {recipes.summary.total_calories}</p>
+                    <p><strong>Nutrition Benefits:</strong> {recipes.summary.nutrition_benefits}</p>
+                    <p><strong>Freshness Considerations:</strong> {recipes.summary.freshness_considerations}</p>
+                  </div>
+                )}
+                
+                <div className="recipes-list">
+                  {recipes.recipes && recipes.recipes.map((recipe, index) => (
+                    <div key={index} className="recipe-card">
+                      <div className="recipe-header">
+                        <h4>{recipe.name}</h4>
+                        <div className="recipe-meta">
+                          <span className="cooking-time">⏱️ {recipe.cooking_time}</span>
+                          <span className="difficulty">📊 {recipe.difficulty}</span>
+                          <span className="servings">👥 {recipe.servings} servings</span>
+                          <span className="calories">🔥 {recipe.calories_per_serving} cal/serving</span>
+                        </div>
+                      </div>
+                      
+                      <p className="recipe-description">{recipe.description}</p>
+                      
+                      <div className="recipe-ingredients">
+                        <h5>🥕 Ingredients:</h5>
+                        <ul>
+                          {recipe.ingredients.map((ingredient, idx) => (
+                            <li key={idx}>
+                              <strong>{ingredient.item}</strong> - {ingredient.amount}
+                              {ingredient.notes && <span className="ingredient-notes"> ({ingredient.notes})</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      <div className="recipe-instructions">
+                        <h5>📝 Instructions:</h5>
+                        <ol>
+                          {recipe.instructions.map((instruction, idx) => (
+                            <li key={idx}>{instruction}</li>
+                          ))}
+                        </ol>
+                      </div>
+                      
+                      {recipe.tips && (
+                        <div className="recipe-tips">
+                          <h5>💡 Tips:</h5>
+                          <p>{recipe.tips}</p>
+                        </div>
+                      )}
+                      
+                      {recipe.why_this_recipe && (
+                        <div className="recipe-why">
+                          <h5>🤔 Why This Recipe:</h5>
+                          <p>{recipe.why_this_recipe}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
         
