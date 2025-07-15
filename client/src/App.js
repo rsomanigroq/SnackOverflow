@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
 function App() {
+  const [mode, setMode] = useState('upload');          // current UI mode: 'upload' or 'camera'
+  const [lastSource, setLastSource] = useState(null);  // how current preview was created: 'upload' | 'camera'
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [stream, setStream] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -101,16 +104,60 @@ function App() {
     return ''; // Default green for good freshness
   };
 
-  const handleImageUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // start/stop camera
+  useEffect(() => {
+    if (mode === 'camera') {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(s => {
+          videoRef.current.srcObject = s;
+          videoRef.current.play();
+          setStream(s);
+        })
+        .catch(() => {
+          alert('Unable to access camera');
+          setMode('upload');
+        });
+    } else if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      setStream(null);
+    }
+    return () => {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    };
+  // eslint-disable-next-line
+  }, [mode]);
+
+  const handleImageUpload = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLastSource('upload');
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onload = ev => setPreviewUrl(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleCapture = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      setLastSource('camera');
+      const file = new File([blob], 'capture.png', { type: 'image/png' });
       setSelectedImage(file);
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewUrl(e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
+      reader.onload = ev => setPreviewUrl(ev.target.result);
+      reader.readAsDataURL(blob);
+      setMode('upload');
+    });
   };
 
   const analyzeFood = async () => {
@@ -118,16 +165,28 @@ function App() {
     
     setAnalyzing(true);
     
+    // Debug logging for the selected image
+    console.log('Analyzing image:', selectedImage);
+    console.log('Image type:', selectedImage.type);
+    console.log('Image size:', selectedImage.size);
+    console.log('Image name:', selectedImage.name);
+    console.log('Last source:', lastSource);
+    
     try {
       // Create FormData to send the image file
       const formData = new FormData();
       formData.append('image', selectedImage);
+      
+      console.log('FormData created, sending to backend...');
       
       // Call the backend API
       const response = await fetch('http://localhost:5000/analyze', {
         method: 'POST',
         body: formData,
       });
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -179,6 +238,17 @@ function App() {
     setSelectedImage(null);
     setPreviewUrl(null);
     setAnalysisResult(null);
+    setLastSource(null);
+  };
+
+  const handlePreviewClick = () => {
+    if (lastSource === 'camera') {
+      // retake
+      setMode('camera');
+    } else if (lastSource === 'upload') {
+      // re-upload
+      fileInputRef.current.click();
+    }
   };
 
   return (
@@ -195,7 +265,7 @@ function App() {
           📋 {showHistory ? 'Hide' : 'Show'} History
         </button>
       </header>
-      
+
       <main className="App-main">
         {!showHistory ? (
           <>
@@ -203,34 +273,78 @@ function App() {
               <div className="upload-area">
                 <h2>📸 Scan Your Food</h2>
                 <p>Take a photo or upload an image to get instant nutrition and quality analysis</p>
-                
-                <div className="upload-box">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleImageUpload}
-                    id="image-upload"
-                    className="file-input"
-                  />
-                  <label htmlFor="image-upload" className="upload-label">
-                    {previewUrl ? (
-                      <div className="preview-container">
-                        <img src={previewUrl} alt="Preview" className="preview-image" />
-                        <div className="preview-overlay">
-                          <span>Click to change image</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="upload-placeholder">
-                        <div className="upload-icon">📸</div>
-                        <p>Click to take photo or upload image</p>
-                        <p className="upload-hint">Supports: JPG, PNG, GIF</p>
-                      </div>
-                    )}
-                  </label>
+
+                <div className="mode-switch">
+                  <button
+                    className={mode === 'upload' ? 'active' : ''}
+                    onClick={() => setMode('upload')}
+                  >
+                    📁 Upload
+                  </button>
+                  <button
+                    className={mode === 'camera' ? 'active' : ''}
+                    onClick={() => setMode('camera')}
+                  >
+                    📷 Camera
+                  </button>
                 </div>
-                
+
+                <div className="upload-box">
+                  {mode === 'upload' && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        id="image-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="file-input"
+                      />
+
+                      {previewUrl ? (
+                        <div
+                          className="preview-container"
+                          onClick={handlePreviewClick}
+                        >
+                          <img
+                            src={previewUrl}
+                            alt="Preview"
+                            className="preview-image"
+                          />
+                          <div className="preview-overlay">
+                            <span>
+                              {lastSource === 'camera'
+                                ? 'Click to retake'
+                                : 'Click to change'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <label htmlFor="image-upload" className="upload-label">
+                          <div className="upload-placeholder">
+                            <div className="upload-icon">📸</div>
+                            <p>Click to upload food image</p>
+                            <p className="upload-hint">Supports: JPG, PNG, GIF</p>
+                          </div>
+                        </label>
+                      )}
+                    </>
+                  )}
+
+                  {mode === 'camera' && (
+                    <div className="camera-container">
+                      <video ref={videoRef} className="camera-video" />
+                      <button
+                        className="capture-button"
+                        onClick={handleCapture}
+                      >
+                        📷 Capture
+                      </button>
+                      <canvas ref={canvasRef} style={{ display: 'none' }} />
+                    </div>
+                  )}
+                </div>
+
                 {selectedImage && !analysisResult && (
                   <div className="upload-actions">
                     <button 
@@ -377,7 +491,7 @@ function App() {
           </div>
         </div>
       </main>
-      
+
       <footer className="App-footer">
         <p>&copy; 2024 SnackOverflow. Real-time quality assessment powered by Groq 🚀</p>
       </footer>
