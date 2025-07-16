@@ -604,7 +604,6 @@ function App() {
         timestamp: "Just now"
       };
       setScanHistory([newHistoryItem, ...scanHistory]);
-      
     } catch (error) {
       console.error('Error analyzing food:', error);
       alert('Error analyzing food. Please try again.');
@@ -757,6 +756,34 @@ function App() {
             📋 {showHistory ? 'Hide' : 'Show'} History
           </button>
         </div>
+    <div className="App">
+      {/* Floating particles background */}
+      <div className="floating-particles">
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+      </div>
+
+      <header className="App-header">
+        <div className="header-left">
+          <div className="header-logo">🍎</div>
+          <div>
+            <h1>SnackOverflow</h1>
+            <p>AI-Powered Food Analysis & Quality Assessment</p>
+          </div>
+        </div>
+        <button
+          className="history-button glow-effect"
+          onClick={() => setShowHistory(!showHistory)}
+        >
+          📋 {showHistory ? 'Hide' : 'Show'} History
+        </button>
       </header>
 
       <main className="App-main">
@@ -842,7 +869,7 @@ function App() {
                         </div>
                       ) : (
                         <label htmlFor="image-upload" className="upload-label">
-                          <div className="upload-placeholder">
+                          <div className="upload-placeholder glow-effect">
                             <div className="upload-icon">📸</div>
                             <p>Click to upload food image or say "upload"</p>
                             <p className="upload-hint">Supports: JPG, PNG, GIF</p>
@@ -918,7 +945,10 @@ function App() {
               <div className="analyzing-container" aria-live="polite">
                 <div className="analyzing-content">
                   <div className="analyzing-spinner">
-                    <div className="spinner"></div>
+                    <svg className="progress-ring" viewBox="0 0 100 100">
+                      <circle className="bg" cx="50" cy="50" r="40"></circle>
+                      <circle className="progress" cx="50" cy="50" r="40"></circle>
+                    </svg>
                   </div>
                   <h3>🔍 Analyzing Your Food</h3>
                   <p>AI is examining your image for nutrition facts, quality assessment, and recommendations...</p>
@@ -945,19 +975,12 @@ function App() {
             )}
 
             {analysisResult && (
-              <div className="analysis-result" aria-live="polite">
-                <div className="result-content">
-                  <h3 className="result-header">
-                    {getFoodEmoji(analysisResult.name)} Analysis Results
-                  </h3>
-                  
-                  <div className="food-identification">
-                    <h4>🍎 Food Identification</h4>
-                    <div className="identification-content">
-                      <span className="food-name">{analysisResult.name}</span>
-                      {analysisResult.groqPowered && (
-                        <span className="groq-badge">Powered by Groq AI</span>
-                      )}
+              <div className="analysis-container">
+                <div className="analysis-card">
+                  <div className="analysis-header">
+                    <h3><span className="food-emoji">{getFoodEmoji(analysisResult.name)}</span> {analysisResult.name}</h3>
+                    <div className="groq-badge quality-pulse">
+                      Powered by Groq
                     </div>
                   </div>
                   
@@ -1028,12 +1051,19 @@ function App() {
                     <button 
                       className="save-button"
                       onClick={() => {
-                        announceText('Analysis saved to your food diary!');
-                        alert('Saved to your food diary! 📝');
+                        // Save the current analysis result to history
+                        const newHistoryItem = {
+                          id: Date.now(),
+                          ...analysisResult,
+                          image: previewUrl,
+                          timestamp: "Just now"
+                        };
+                        setScanHistory([newHistoryItem, ...scanHistory]);
+                        alert('Saved to your cupboard! 🥫');
                       }}
                       aria-label="Save to diary"
                     >
-                      Save to Diary
+                      Save to Cupboard
                     </button>
                     <button 
                       className="scan-again-button"
@@ -1094,34 +1124,52 @@ function App() {
             
             {/* Recipe results display */}
             {recipes && (
-              <div className="recipes-section" aria-live="polite">
-                <h3>🍳 Generated Recipes</h3>
-                <div className="recipes-content">
-                  {Array.isArray(recipes.recipes) ? (
-                    recipes.recipes.map((recipe, index) => (
-                      <div key={index} className="recipe-card">
-                        <h4>{recipe.name || `Recipe ${index + 1}`}</h4>
-                        <p>{recipe.description || recipe}</p>
-                        {recipe.ingredients && (
-                          <div className="ingredients">
-                            <strong>Ingredients:</strong>
-                            <ul>
-                              {recipe.ingredients.map((ingredient, i) => (
-                                <li key={i}>{ingredient}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {recipe.instructions && (
-                          <div className="instructions">
-                            <strong>Instructions:</strong>
-                            <ol>
-                              {recipe.instructions.map((step, i) => (
-                                <li key={i}>{step}</li>
-                              ))}
-                            </ol>
-                          </div>
-                        )}
+              <div className="recipes-container">
+                <h3>🍽️ Generated Recipes</h3>
+                
+                <div className="recipes-list">
+                  {recipes.recipes && recipes.recipes.map((recipe, index) => (
+                    <div key={index} className="recipe-card">
+                      <div className="recipe-header">
+                        <h4>{recipe.name}</h4>
+                        <div className="recipe-meta">
+                          <span className="cooking-time">⏱️ {recipe.cooking_time}</span>
+                          <span className="difficulty">📊 {recipe.difficulty}</span>
+                          <span className="servings">👥 {recipe.servings} servings</span>
+                          <span className="calories">🔥 {recipe.calories_per_serving} cal/serving</span>
+                        </div>
+                      </div>
+                      
+                      {recipe.summary && (
+                        <div className="recipe-summary">
+                          <h4>📊 Recipe Summary</h4>
+                          <p><strong>Total Calories:</strong> {recipe.summary.total_calories}</p>
+                          <p><strong>Nutrition Benefits:</strong> {recipe.summary.nutrition_benefits}</p>
+                          <p><strong>Freshness Considerations:</strong> {recipe.summary.freshness_considerations}</p>
+                        </div>
+                      )}
+                      
+                      <p className="recipe-description">{recipe.description}</p>
+                      
+                      <div className="recipe-ingredients">
+                        <h5>🥕 Ingredients:</h5>
+                        <ul>
+                          {recipe.ingredients.map((ingredient, idx) => (
+                            <li key={idx}>
+                              <strong>{ingredient.item}</strong> - {ingredient.amount}
+                              {ingredient.notes && <span className="ingredient-notes"> ({ingredient.notes})</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      <div className="recipe-instructions">
+                        <h5>📝 Instructions:</h5>
+                        <ol>
+                          {recipe.instructions.map((instruction, idx) => (
+                            <li key={idx}>{instruction}</li>
+                          ))}
+                        </ol>
                       </div>
                     ))
                   ) : (
@@ -1152,7 +1200,7 @@ function App() {
       </main>
 
       <footer className="App-footer">
-        <p>&copy; 2024 SnackOverflow. Accessible AI-powered food analysis 🚀</p>
+        <p>&copy; 2025 SnackOverflow. Real-time quality assessment powered by Groq 🚀</p>
       </footer>
     </div>
   );
