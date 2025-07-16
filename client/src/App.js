@@ -951,17 +951,10 @@ function App() {
               <div className="analysis-result" aria-live="polite">
                 <div className="result-content">
                   <h3 className="result-header">
-                    {getFoodEmoji(analysisResult.name)} Analysis Results
+                    Analysis Results
                   </h3>
-                  
-                  <div className="food-identification">
-                    <h4>🍎 Food Identification</h4>
-                    <div className="identification-content">
-                      <span className="food-name">{analysisResult.name}</span>
-                      {analysisResult.groqPowered && (
-                        <span className="groq-badge">Powered by Groq AI</span>
-                      )}
-                    </div>
+                  <div className="food-name" style={{textAlign: 'center', fontSize: '1.8rem', fontWeight: 'bold', color: '#667eea', marginBottom: '1.5rem'}}>
+                    {getFoodEmoji(analysisResult.name)} {analysisResult.name}
                   </div>
                   
                   <div className="nutrition-section">
