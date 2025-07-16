@@ -323,6 +323,112 @@ Respond ONLY with valid JSON. Do not include any text before or after the JSON o
     except Exception as e:
         print(f"Error with Groq API for recipe generation: {e}")
         return None
+    
+def compare_fruits_with_groq(image_path1, image_path2, groq_api_key):
+    """Compare two fruit images and decide which is better using Groq"""
+
+    # Initialize Groq client
+    client = Groq(api_key=groq_api_key)
+
+    # Helper to encode an image file to base64
+    def _b64(path):
+        b64 = encode_image_to_base64(path)
+        if not b64:
+            raise ValueError(f"Couldn’t encode {path}")
+        return b64
+
+    try:
+        # Encode both images
+        img1_b64 = _b64(image_path1)
+        img2_b64 = _b64(image_path2)
+
+        # Build the chat prompt + two image attachments
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "Here are two fruit images. "
+                            "Please tell me **which fruit is better in terms of sweetness, freshness, and overall quality** and give a "
+                            "one-sentence reason. "
+                            "Keep your answer super brief (audio-friendly)."
+                        )
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img1_b64}"}
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img2_b64}"}
+                    }
+                ]
+            }
+        ]
+
+        resp = client.chat.completions.create(
+            messages=messages,
+            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            temperature=0.1,
+            max_tokens=100,
+        )
+        return resp.choices[0].message.content
+
+    except Exception as e:
+        print(f"Error with Groq API: {e}")
+        return None
+
+@app.route('/compare-fruits', methods=['POST'])
+def compare_fruits():
+    """API endpoint to compare two fruit images"""
+    try:
+        # Check if two image files are in request
+        if 'image1' not in request.files or 'image2' not in request.files:
+            return jsonify({'error': 'Two image files are required'}), 400
+        
+        file1 = request.files['image1']
+        file2 = request.files['image2']
+        if file1.filename == '' or file2.filename == '':
+            return jsonify({'error': 'Both image files are required'}), 400
+        
+        # Get API key from environment variable
+        api_key = os.getenv('GROQ_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'GROQ_API_KEY not configured'}), 500
+        
+        # Save uploaded files temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file1:
+            file1.save(temp_file1.name)
+            temp_path1 = temp_file1.name
+            
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file2:
+            file2.save(temp_file2.name)
+            temp_path2 = temp_file2.name
+        
+        try:
+            print(f"Comparing fruits: {file1.filename} and {file2.filename}")
+            
+            # Compare the fruits
+            result = compare_fruits_with_groq(temp_path1, temp_path2, api_key)
+            
+            if result:
+                print(f"Groq response: {result}")
+                return jsonify({'result': result})
+            else:
+                return jsonify({'error': 'Failed to compare fruits'}), 500
+                
+        finally:
+            # Clean up temporary files
+            if os.path.exists(temp_path1):
+                os.unlink(temp_path1)
+            if os.path.exists(temp_path2):
+                os.unlink(temp_path2)
+                
+    except Exception as e:
+        print(f"Server error: {str(e)}")
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/analyze', methods=['POST'])
 def analyze_food():

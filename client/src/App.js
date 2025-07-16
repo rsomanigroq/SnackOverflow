@@ -23,6 +23,7 @@ function App() {
   const [accessibilityMode, setAccessibilityMode] = useState(false);
   const [voiceCommandsEnabled, setVoiceCommandsEnabled] = useState(true);
   const [currentAnnouncement, setCurrentAnnouncement] = useState('');
+  const [comparisonResult, setComparisonResult] = useState(null);
 
   // References for voice recording
   const mediaRecorderRef = useRef(null);
@@ -752,10 +753,34 @@ function App() {
     }
   };
 
-  const handleSendSelected = () => {
-    const selectedItemsData = scanHistory.filter((item) => selectedItems.includes(item.id));
-    console.log('Selected items:', selectedItemsData);
-    // Add code to send the selected items to the backend here
+  const handleSendSelected = async () => {
+      const selectedItemsData = scanHistory.filter((item) => selectedItems.includes(item.id));
+      console.log('Selected items:', selectedItemsData);
+      
+      // Convert the image URLs to blobs
+      const image1 = await fetch(selectedItemsData[0].image)
+          .then(response => response.blob())
+          .then(blob => new File([blob], 'image1.jpg', { type: 'image/jpeg' }));
+      const image2 = await fetch(selectedItemsData[1].image)
+          .then(response => response.blob())
+          .then(blob => new File([blob], 'image2.jpg', { type: 'image/jpeg' }));
+      
+      // Create a FormData object to send the images
+      const formData = new FormData();
+      formData.append('image1', image1);
+      formData.append('image2', image2);
+      
+      // Send the images to the backend
+      fetch('http://localhost:5000/compare-fruits', {
+          method: 'POST',
+          body: formData,
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log(data)
+        setComparisonResult({ result: data.result, selectedItemsData });
+    })
+    .catch(error => console.error('Error:', error));
   };
 
   return (
@@ -1152,12 +1177,45 @@ function App() {
                 {generatingRecipes ? '🍳 Generating Recipes...' : '🍳 Generate Recipes'}
               </button>
               <button 
+                className="send-selected-button fancy-button"
                 onClick={handleSendSelected}
                 aria-label="Send selected items"
               >
-                Send Selected
+                Compare Two Items
               </button>
             </div>
+
+            {comparisonResult && (
+              <div className="comparison-panel">
+                <button
+                  className="close-comparison"
+                  onClick={() => setComparisonResult(null)}
+                  aria-label="Close comparison"
+                >
+                  ×
+                </button>
+                <h3>Comparison Result</h3>
+                <div className="comparison-images">
+                  <figure>
+                    <img
+                      src={comparisonResult.selectedItemsData[0].image}
+                      alt={comparisonResult.selectedItemsData[0].name}
+                    />
+                    <figcaption>{comparisonResult.selectedItemsData[0].name}</figcaption>
+                  </figure>
+                  <figure>
+                    <img
+                      src={comparisonResult.selectedItemsData[1].image}
+                      alt={comparisonResult.selectedItemsData[1].name}
+                    />
+                    <figcaption>{comparisonResult.selectedItemsData[1].name}</figcaption>
+                  </figure>
+                </div>
+                <div className="comparison-result-text">
+                  <strong>Idea:</strong> {comparisonResult.result}
+                </div>
+              </div>
+            )}
             
             {/* Recipe results display */}
             {recipes && (
