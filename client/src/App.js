@@ -15,6 +15,271 @@ function App() {
   const [scanHistory, setScanHistory] = useState([]);
   const [recipes, setRecipes] = useState(null);
   const [generatingRecipes, setGeneratingRecipes] = useState(false);
+  
+  // New accessibility states
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [lastAudioResponse, setLastAudioResponse] = useState('');
+  const [accessibilityMode, setAccessibilityMode] = useState(false);
+  const [voiceCommandsEnabled, setVoiceCommandsEnabled] = useState(true);
+  const [currentAnnouncement, setCurrentAnnouncement] = useState('');
+
+  // References for voice recording
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  // Voice commands reference for accessibility
+  const voiceCommands = useRef({
+    analyze: ['analyze', 'scan', 'check food', 'examine', 'process image'],
+    camera: ['camera', 'take photo', 'use camera'],
+    capture: ['capture', 'take picture', 'snap photo'],
+    upload: ['upload', 'select file', 'choose image', 'browse'],
+    history: ['history', 'show history', 'recent scans', 'past analyses'],
+    help: ['help', 'tutorial', 'how to use', 'instructions', 'guide'],
+    reset: ['reset', 'clear', 'start over', 'cancel'],
+    repeat: ['repeat', 'say again', 'read again']
+  });
+
+  // Announce text for screen readers and voice feedback
+  const announceText = async (text) => {
+    setCurrentAnnouncement(text);
+    
+    if (voiceEnabled) {
+      try {
+        const response = await fetch('http://localhost:5000/generate-audio', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text }),
+        });
+        
+        if (response.ok) {
+          console.log('🔊 Announcement played:', text);
+        }
+      } catch (error) {
+        console.error('Error playing announcement:', error);
+        // Fallback to browser speech synthesis
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = 0.9;
+          utterance.volume = 0.8;
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+    }
+  };
+
+  // Start voice recording
+  const startVoiceRecording = async () => {
+    try {
+      setIsListening(true);
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        await processVoiceCommand(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current.start();
+      
+      // Auto-stop after 5 seconds
+      setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          stopVoiceRecording();
+        }
+      }, 5000);
+      
+    } catch (error) {
+      console.error('Error starting voice recording:', error);
+      setIsListening(false);
+    }
+  };
+
+  // Stop voice recording
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsListening(false);
+  };
+
+  // Process voice command
+  const processVoiceCommand = async (audioBlob) => {
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'voice-command.wav');
+
+      const response = await fetch('http://localhost:5000/transcribe-audio', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setVoiceTranscript(result.transcription);
+      
+      // Auto-hide transcript after 4 seconds
+      setTimeout(() => {
+        setVoiceTranscript('');
+      }, 4000);
+      
+      // Execute voice command
+      if (result.voice_command && result.voice_command.command !== 'unknown') {
+        await executeVoiceCommand(result.voice_command);
+      }
+      
+    } catch (error) {
+      console.error('Error processing voice command:', error);
+    }
+  };
+
+  // Execute voice command
+  const executeVoiceCommand = async (voiceCommand) => {
+    const { command, matched_phrase } = voiceCommand;
+    
+    switch (command) {
+      case 'analyze':
+        if (selectedImage) {
+          await analyzeFood();
+        }
+        break;
+        
+      case 'camera':
+        setMode('camera');
+        break;
+        
+      case 'capture':
+        if (mode === 'camera') {
+          handleCapture();
+        } else {
+          // Switch to camera mode first, then capture on next command
+          setMode('camera');
+        }
+        break;
+        
+      case 'upload':
+        setMode('upload');
+        if (fileInputRef.current) {
+          fileInputRef.current.click();
+        }
+        break;
+        
+      case 'history':
+        setShowHistory(true);
+        // Announce brief summary of scan history
+        if (scanHistory.length > 0) {
+          const foodNames = scanHistory.slice(0, 5).map(item => item.name).join(', ');
+          const summaryText = `You have ${scanHistory.length} recent scan${scanHistory.length === 1 ? '' : 's'}: ${foodNames}${scanHistory.length > 5 ? ', and more' : ''}.`;
+          await announceText(summaryText);
+        } else {
+          await announceText("No scan history available. Start by analyzing some food!");
+        }
+        break;
+        
+      case 'help':
+        await showVoiceTutorial();
+        break;
+        
+      case 'reset':
+        resetAnalysis();
+        break;
+        
+      case 'repeat':
+        if (lastAudioResponse) {
+          await announceText(lastAudioResponse);
+        }
+        break;
+        
+      default:
+        // Silently ignore unrecognized commands
+        break;
+    }
+  };
+
+  // Show voice tutorial
+  const showVoiceTutorial = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/voice-tutorial');
+      const tutorial = await response.json();
+      
+      let tutorialText = tutorial.welcome_message + " ";
+      
+      Object.entries(tutorial.commands).forEach(([category, commands]) => {
+        tutorialText += `${category}: `;
+        commands.forEach(command => {
+          tutorialText += `${command}. `;
+        });
+      });
+      
+      tutorialText += "Tips: ";
+      tutorial.tips.forEach(tip => {
+        tutorialText += `${tip}. `;
+      });
+      
+      await announceText(tutorialText);
+      
+    } catch (error) {
+      console.error('Error getting voice tutorial:', error);
+      await announceText("Tutorial not available at the moment.");
+    }
+  };
+
+  // Keyboard navigation for accessibility
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Voice activation with spacebar
+      if (event.code === 'Space' && voiceCommandsEnabled && !isListening) {
+        event.preventDefault();
+        startVoiceRecording();
+      }
+      
+      // Quick navigation keys
+      if (event.altKey) {
+        switch (event.key) {
+          case '1':
+            event.preventDefault();
+            setMode('upload');
+            break;
+          case '2':
+            event.preventDefault();
+            setMode('camera');
+            break;
+          case '3':
+            event.preventDefault();
+            if (selectedImage) {
+              analyzeFood();
+            }
+            break;
+          case '4':
+            event.preventDefault();
+            setShowHistory(!showHistory);
+            break;
+          case 'h':
+            event.preventDefault();
+            showVoiceTutorial();
+            break;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [voiceCommandsEnabled, isListening, selectedImage, showHistory]);
 
   // Effect to speak voice script when analysis results are set
   useEffect(() => {
@@ -26,6 +291,8 @@ function App() {
         analysisResult.purchaseRecommendation
       );
       
+      setLastAudioResponse(voiceScript);
+      
       // Small delay to ensure UI is updated first
       const timer = setTimeout(() => {
         speakVoiceScript(voiceScript);
@@ -34,6 +301,9 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [analysisResult, voiceEnabled]);
+
+  // Removed mode change announcements
+  // Removed image selection announcements
 
   // Function to get emoji for food name
   const getFoodEmoji = (foodName) => {
@@ -48,62 +318,88 @@ function App() {
     if (foodNameLower.includes('blueberry')) return '🫐';
     if (foodNameLower.includes('watermelon')) return '🍉';
     if (foodNameLower.includes('bell pepper')) return '🫑';
-    if (foodNameLower.includes('sweet potato')) return '🍠';
-    if (foodNameLower.includes('banana')) return '🍌';
-    if (foodNameLower.includes('apple')) return '🍎';
-    if (foodNameLower.includes('orange')) return '🍊';
-    if (foodNameLower.includes('grape')) return '🍇';
-    if (foodNameLower.includes('raspberry')) return '🍓';
-    if (foodNameLower.includes('mango')) return '🥭';
-    if (foodNameLower.includes('peach')) return '🍑';
-    if (foodNameLower.includes('pear')) return '🍐';
-    if (foodNameLower.includes('kiwi')) return '🥝';
-    if (foodNameLower.includes('melon')) return '🍈';
-    if (foodNameLower.includes('cherry')) return '🍒';
-    if (foodNameLower.includes('plum')) return '🫐';
-    
-    // Vegetables
-    if (foodNameLower.includes('carrot')) return '🥕';
+    if (foodNameLower.includes('green pepper')) return '🫑';
+    if (foodNameLower.includes('red pepper')) return '🌶️';
+    if (foodNameLower.includes('hot pepper')) return '🌶️';
+    if (foodNameLower.includes('chili')) return '🌶️';
+    if (foodNameLower.includes('avocado')) return '🥑';
+    if (foodNameLower.includes('eggplant')) return '🍆';
+    if (foodNameLower.includes('corn')) return '🌽';
     if (foodNameLower.includes('broccoli')) return '🥦';
-    if (foodNameLower.includes('tomato')) return '🍅';
-    if (foodNameLower.includes('cucumber')) return '🥒';
     if (foodNameLower.includes('lettuce')) return '🥬';
     if (foodNameLower.includes('spinach')) return '🥬';
-    if (foodNameLower.includes('onion')) return '🧅';
-    if (foodNameLower.includes('garlic')) return '🧄';
+    if (foodNameLower.includes('kale')) return '🥬';
+    if (foodNameLower.includes('cabbage')) return '🥬';
+    if (foodNameLower.includes('carrot')) return '🥕';
     if (foodNameLower.includes('potato')) return '🥔';
     if (foodNameLower.includes('sweet potato')) return '🍠';
-    if (foodNameLower.includes('corn')) return '🌽';
-    if (foodNameLower.includes('pepper')) return '🫑';
-    if (foodNameLower.includes('bell pepper')) return '🫑';
+    if (foodNameLower.includes('onion')) return '🧅';
+    if (foodNameLower.includes('garlic')) return '🧄';
+    if (foodNameLower.includes('ginger')) return '🫚';
+    if (foodNameLower.includes('mushroom')) return '🍄';
+    if (foodNameLower.includes('tomato')) return '🍅';
+    if (foodNameLower.includes('cucumber')) return '🥒';
+    if (foodNameLower.includes('olive')) return '🫒';
+    if (foodNameLower.includes('coconut')) return '🥥';
+    if (foodNameLower.includes('kiwi')) return '🥝';
+    if (foodNameLower.includes('mango')) return '🥭';
+    if (foodNameLower.includes('peach')) return '🍑';
+    if (foodNameLower.includes('cherr')) return '🍒';
+    if (foodNameLower.includes('grape')) return '🍇';
+    if (foodNameLower.includes('melon')) return '🍈';
+    if (foodNameLower.includes('banana')) return '🍌';
+    if (foodNameLower.includes('apple')) return '🍎';
+    if (foodNameLower.includes('pear')) return '🍐';
+    if (foodNameLower.includes('orange')) return '🍊';
+    if (foodNameLower.includes('lemon')) return '🍋';
+    if (foodNameLower.includes('lime')) return '🍋';
+    if (foodNameLower.includes('grapefruit')) return '🍊';
     
-    // Other foods
+    // Nuts and legumes
+    if (foodNameLower.includes('peanut')) return '🥜';
+    if (foodNameLower.includes('almond')) return '🥜';
+    if (foodNameLower.includes('walnut')) return '🥜';
+    if (foodNameLower.includes('nut')) return '🥜';
+    if (foodNameLower.includes('bean')) return '🫘';
+    if (foodNameLower.includes('pea')) return '🟢';
+    
+    // Herbs and spices
+    if (foodNameLower.includes('herb')) return '🌿';
+    if (foodNameLower.includes('basil')) return '🌿';
+    if (foodNameLower.includes('parsley')) return '🌿';
+    if (foodNameLower.includes('cilantro')) return '🌿';
+    if (foodNameLower.includes('mint')) return '🌿';
+    
+    // Grains and bread
     if (foodNameLower.includes('bread')) return '🍞';
-    if (foodNameLower.includes('pizza')) return '🍕';
-    if (foodNameLower.includes('burger')) return '🍔';
-    if (foodNameLower.includes('hot dog')) return '🌭';
-    if (foodNameLower.includes('taco')) return '🌮';
-    if (foodNameLower.includes('sushi')) return '🍣';
     if (foodNameLower.includes('rice')) return '🍚';
     if (foodNameLower.includes('pasta')) return '🍝';
-    if (foodNameLower.includes('salad')) return '🥗';
-    if (foodNameLower.includes('sandwich')) return '🥪';
-    if (foodNameLower.includes('cake')) return '🍰';
-    if (foodNameLower.includes('cookie')) return '🍪';
-    if (foodNameLower.includes('ice cream')) return '🍨';
-    if (foodNameLower.includes('chocolate')) return '🍫';
-    if (foodNameLower.includes('coffee')) return '☕';
-    if (foodNameLower.includes('tea')) return '🫖';
+    if (foodNameLower.includes('wheat')) return '🌾';
+    if (foodNameLower.includes('grain')) return '🌾';
+    if (foodNameLower.includes('oat')) return '🌾';
+    if (foodNameLower.includes('quinoa')) return '🌾';
+    
+    // Meat and protein
+    if (foodNameLower.includes('chicken')) return '🍗';
+    if (foodNameLower.includes('beef')) return '🥩';
+    if (foodNameLower.includes('pork')) return '🥓';
+    if (foodNameLower.includes('fish')) return '🐟';
+    if (foodNameLower.includes('salmon')) return '🐟';
+    if (foodNameLower.includes('tuna')) return '🐟';
+    if (foodNameLower.includes('shrimp')) return '🦐';
+    if (foodNameLower.includes('lobster')) return '🦞';
+    if (foodNameLower.includes('crab')) return '🦀';
+    if (foodNameLower.includes('egg')) return '🥚';
+    
+    // Dairy
     if (foodNameLower.includes('milk')) return '🥛';
     if (foodNameLower.includes('cheese')) return '🧀';
-    if (foodNameLower.includes('egg')) return '🥚';
-    if (foodNameLower.includes('meat')) return '🥩';
-    if (foodNameLower.includes('chicken')) return '🍗';
-    if (foodNameLower.includes('fish')) return '🐟';
-    if (foodNameLower.includes('shrimp')) return '🦐';
+    if (foodNameLower.includes('butter')) return '🧈';
+    if (foodNameLower.includes('yogurt')) return '🥛';
+    if (foodNameLower.includes('cream')) return '🥛';
     
-    // Default fallback
-    return '😊';
+    // Default food emoji
+    return '🍽️';
   };
 
   // Function to get freshness class based on level
@@ -298,6 +594,16 @@ function App() {
       
       setAnalysisResult(transformedResult);
       
+      // Analysis completion will be announced through the voice script below
+      
+      // Add to history (the backend now saves to database automatically)
+      const newHistoryItem = {
+        id: transformedResult.id || Date.now(),
+        ...transformedResult,
+        image: previewUrl,
+        timestamp: "Just now"
+      };
+      setScanHistory([newHistoryItem, ...scanHistory]);
     } catch (error) {
       console.error('Error analyzing food:', error);
       alert('Error analyzing food. Please try again.');
@@ -381,6 +687,75 @@ function App() {
   };
 
   return (
+    <div className="App" role="main">
+      {/* Accessibility announcements */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {currentAnnouncement}
+      </div>
+      
+      {/* Speech-to-text subtitle display */}
+      {(isListening || voiceTranscript) && (
+        <div className="subtitle-overlay" aria-live="polite">
+          <div className="subtitle-content">
+            {isListening ? (
+              <div className="listening-indicator">
+                <span className="listening-text">🎤 Listening...</span>
+                <div className="listening-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            ) : voiceTranscript ? (
+              <div className="transcript-display">
+                <span className="transcript-label">You said:</span>
+                <span className="transcript-text">"{voiceTranscript}"</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+      
+      <header className="App-header">
+        <div className="header-left">
+          <h1>🍌 SnackOverflow</h1>
+          <p>Accessible AI-powered food analysis</p>
+        </div>
+        
+        <div className="header-controls">
+          {/* Voice controls */}
+          <div className="voice-controls">
+            <button 
+              className={`voice-button ${isListening ? 'listening' : ''}`}
+              onClick={isListening ? stopVoiceRecording : startVoiceRecording}
+              disabled={analyzing}
+              aria-label={isListening ? 'Stop listening' : 'Start voice command'}
+              title="Press spacebar or click to give voice commands"
+            >
+              {isListening ? '🔴 Listening...' : '🎤 Voice Commands'}
+            </button>
+            
+            <button 
+              className="tutorial-button"
+              onClick={showVoiceTutorial}
+              aria-label="Voice tutorial"
+              title="Alt+H for voice tutorial"
+            >
+              ❓ Help
+            </button>
+          </div>
+          
+          <button 
+            className="history-button"
+            onClick={() => {
+              setShowHistory(!showHistory);
+            }}
+            aria-label={showHistory ? 'Hide history' : 'Show history'}
+            title="Alt+4 to toggle history"
+          >
+            📋 {showHistory ? 'Hide' : 'Show'} History
+          </button>
+        </div>
     <div className="App">
       {/* Floating particles background */}
       <div className="floating-particles">
@@ -412,23 +787,41 @@ function App() {
       </header>
 
       <main className="App-main">
+        {/* Accessibility instructions */}
+        <div className="accessibility-instructions" aria-label="Keyboard shortcuts">
+          <p className="sr-only">
+            Keyboard shortcuts: Spacebar for voice commands, Alt+1 for upload, Alt+2 for camera, 
+            Alt+3 to analyze, Alt+4 for history, Alt+H for help
+          </p>
+        </div>
+
         {!showHistory ? (
           <>
             <div className="upload-container" style={{ display: hideCaptureSection ? 'none' : 'block' }}>
               <div className="upload-area">
                 <h2>📸 Scan Your Food</h2>
-                <p>Take a photo or upload an image to get instant nutrition and quality analysis</p>
+                <p>Take a photo, upload an image, or use voice commands for instant analysis</p>
 
-                <div className="mode-switch">
+                <div className="mode-switch" role="tablist">
                   <button
                     className={mode === 'upload' ? 'active' : ''}
-                    onClick={() => setMode('upload')}
+                    onClick={() => {
+                      setMode('upload');
+                    }}
+                    role="tab"
+                    aria-selected={mode === 'upload'}
+                    aria-label="Upload mode - Alt+1"
                   >
                     📁 Upload
                   </button>
                   <button
                     className={mode === 'camera' ? 'active' : ''}
-                    onClick={() => setMode('camera')}
+                    onClick={() => {
+                      setMode('camera');
+                    }}
+                    role="tab"
+                    aria-selected={mode === 'camera'}
+                    aria-label="Camera mode - Alt+2"
                   >
                     📷 Camera
                   </button>
@@ -444,16 +837,26 @@ function App() {
                         accept="image/*"
                         onChange={handleImageUpload}
                         className="file-input"
+                        aria-label="Select food image"
                       />
 
                       {previewUrl ? (
                         <div
                           className="preview-container"
                           onClick={handlePreviewClick}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Image preview. ${lastSource === 'camera' ? 'Click to retake' : 'Click to change'}`}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handlePreviewClick();
+                            }
+                          }}
                         >
                           <img
                             src={previewUrl}
-                            alt="Preview"
+                            alt="Food preview"
                             className="preview-image"
                           />
                           <div className="preview-overlay">
@@ -468,7 +871,7 @@ function App() {
                         <label htmlFor="image-upload" className="upload-label">
                           <div className="upload-placeholder glow-effect">
                             <div className="upload-icon">📸</div>
-                            <p>Click to upload food image</p>
+                            <p>Click to upload food image or say "upload"</p>
                             <p className="upload-hint">Supports: JPG, PNG, GIF</p>
                           </div>
                         </label>
@@ -478,10 +881,17 @@ function App() {
 
                   {mode === 'camera' && (
                     <div className="camera-container">
-                      <video ref={videoRef} className="camera-video" />
+                      <video 
+                        ref={videoRef} 
+                        className="camera-video"
+                        aria-label="Camera feed"
+                      />
                       <button
                         className="capture-button"
-                        onClick={handleCapture}
+                        onClick={() => {
+                          handleCapture();
+                        }}
+                        aria-label="Capture photo"
                       >
                         📷 Capture
                       </button>
@@ -495,8 +905,11 @@ function App() {
                     <input
                       type="checkbox"
                       checked={voiceEnabled}
-                      onChange={(e) => setVoiceEnabled(e.target.checked)}
+                      onChange={(e) => {
+                        setVoiceEnabled(e.target.checked);
+                      }}
                       className="toggle-input"
+                      aria-label="Toggle audio feedback"
                     />
                     <span className="toggle-slider"></span>
                     <span className="toggle-text">
@@ -511,6 +924,7 @@ function App() {
                       className="analyze-button"
                       onClick={analyzeFood}
                       disabled={analyzing}
+                      aria-label="Analyze food - Alt+3"
                     >
                       {analyzing ? '🔍 Analyzing...' : '🔍 Analyze Food'}
                     </button>
@@ -518,6 +932,7 @@ function App() {
                       className="cancel-button"
                       onClick={resetAnalysis}
                       disabled={analyzing}
+                      aria-label="Cancel analysis"
                     >
                       Cancel
                     </button>
@@ -527,7 +942,7 @@ function App() {
             </div>
 
             {analyzing && (
-              <div className="analyzing-container">
+              <div className="analyzing-container" aria-live="polite">
                 <div className="analyzing-content">
                   <div className="analyzing-spinner">
                     <svg className="progress-ring" viewBox="0 0 100 100">
@@ -536,7 +951,7 @@ function App() {
                     </svg>
                   </div>
                   <h3>🔍 Analyzing Your Food</h3>
-                  <p>Our AI is examining your image for nutrition facts, quality assessment, and recommendations...</p>
+                  <p>AI is examining your image for nutrition facts, quality assessment, and recommendations...</p>
                   <div className="analyzing-steps">
                     <div className="step">
                       <span className="step-icon">📸</span>
@@ -569,48 +984,49 @@ function App() {
                     </div>
                   </div>
                   
-                  <div className="analysis-content">
-                    <div className="nutrition-info">
-                      <div className="calorie-badge">
-                        <span className="calorie-number">{analysisResult.calories}</span>
-                        <span className="calorie-label">calories</span>
+                  <div className="nutrition-section">
+                    <h4>📊 Nutrition Information</h4>
+                    <div className="nutrition-grid">
+                      <div className="nutrition-item">
+                        <span className="nutrition-label">Calories</span>
+                        <span className="nutrition-value">{analysisResult.calories}</span>
                       </div>
-                      <p className="nutrition-text">{analysisResult.nutrition}</p>
-                      {analysisResult.healthBenefits && (
-                        <p className="health-benefits">💚 {analysisResult.healthBenefits}</p>
-                      )}
+                      <div className="nutrition-item">
+                        <span className="nutrition-label">Shelf Life</span>
+                        <span className="nutrition-value">{analysisResult.shelfLife} days</span>
+                      </div>
                     </div>
-                    
-                    <div className="quality-info">
-                      <h4>Quality Assessment</h4>
-                      <div className={`quality-badge ${analysisResult.quality.includes('Fresh') || analysisResult.quality.includes('Excellent') ? 'excellent' : 'warning'}`}>
-                        {analysisResult.quality}
-                      </div>
-                      <p className="quality-details">{analysisResult.qualityDetails}</p>
-                      
-                      {analysisResult.freshnessLevel && (
-                        <div className="freshness-meter">
-                          <span>Freshness: {analysisResult.freshnessLevel}/10</span>
-                          <div className="meter-bar">
-                            <div 
-                              className={`meter-fill ${getFreshnessClass(analysisResult.freshnessLevel)}`}
-                              style={{width: `${(analysisResult.freshnessLevel / 10) * 100}%`}}
-                            ></div>
-                          </div>
+                    <p className="nutrition-details">{analysisResult.nutrition}</p>
+                  </div>
+                  
+                  <div className="quality-section">
+                    <h4>✨ Quality Assessment</h4>
+                    <div className="quality-content">
+                      <div className="freshness-indicator">
+                        <span className="freshness-label">Freshness Level</span>
+                        <div className="freshness-bar">
+                          <div 
+                            className="freshness-fill" 
+                            style={{ width: `${(analysisResult.freshnessLevel / 10) * 100}%` }}
+                          ></div>
+                          <span className="freshness-score">{analysisResult.freshnessLevel}/10</span>
                         </div>
-                      )}
-                      
-                      {analysisResult.bestUse && (
-                        <p className="best-use">🍽️ Best use: {analysisResult.bestUse}</p>
-                      )}
-                      
-                      {analysisResult.shelfLife && (
-                        <p className="shelf-life">📅 Shelf life: {analysisResult.shelfLife} days</p>
-                      )}
+                      </div>
+                      <p className="quality-description">
+                        <strong>Condition:</strong> {analysisResult.quality}
+                      </p>
+                      <p className="quality-details">{analysisResult.qualityDetails}</p>
                     </div>
                   </div>
                   
-                  {/* Purchase Recommendation Section */}
+                  <div className="health-section">
+                    <h4>💪 Health Benefits</h4>
+                    <p className="health-benefits">{analysisResult.healthBenefits}</p>
+                    <div className="best-use">
+                      <strong>Best Use:</strong> {analysisResult.bestUse}
+                    </div>
+                  </div>
+                  
                   <div className="purchase-recommendation-section">
                     <h4>🛒 Purchase Recommendation</h4>
                     <div className={`purchase-recommendation ${analysisResult.shouldBuy ? 'buy' : 'skip'}`}>
@@ -645,12 +1061,14 @@ function App() {
                         setScanHistory([newHistoryItem, ...scanHistory]);
                         alert('Saved to your cupboard! 🥫');
                       }}
+                      aria-label="Save to diary"
                     >
                       Save to Cupboard
                     </button>
                     <button 
                       className="scan-again-button"
                       onClick={resetAnalysis}
+                      aria-label="Scan another food item"
                     >
                       Scan Another
                     </button>
@@ -659,18 +1077,19 @@ function App() {
               </div>
             )}
           </>
-        ) : (
+        ) :
           <div className="history-container">
             <h2>📋 Recent Scans</h2>
-            <div className="history-list">
+            <div className="history-list" role="list">
               {scanHistory.map((item) => (
-                <div key={item.id} className="history-item">
+                <div key={item.id} className="history-item" role="listitem">
                   <input 
                     type="checkbox" 
                     checked={selectedItems.includes(item.id)} 
                     onChange={() => handleSelect(item.id)}
+                    aria-label={`Select ${item.name} for recipe generation`}
                   />
-                  <img src={item.image} alt={item.name} className="history-image" />
+                  <img src={item.image} alt={`${item.name} scan`} className="history-image" />
                   <div className="history-content">
                     <h4>{item.name}</h4>
                     <div className="history-details">
@@ -691,12 +1110,19 @@ function App() {
                 className="generate-recipes-button"
                 onClick={generateRecipes}
                 disabled={generatingRecipes || selectedItems.length === 0}
+                aria-label="Generate recipes from selected items"
               >
                 {generatingRecipes ? '🍳 Generating Recipes...' : '🍳 Generate Recipes'}
               </button>
-              <button onClick={handleSendSelected}>Send Selected</button>
+              <button 
+                onClick={handleSendSelected}
+                aria-label="Send selected items"
+              >
+                Send Selected
+              </button>
             </div>
-
+            
+            {/* Recipe results display */}
             {recipes && (
               <div className="recipes-container">
                 <h3>🍽️ Generated Recipes</h3>
@@ -745,40 +1171,30 @@ function App() {
                           ))}
                         </ol>
                       </div>
-                      
-                      {recipe.tips && (
-                        <div className="recipe-tips">
-                          <h5>💡 Tips:</h5>
-                          <p>{recipe.tips}</p>
-                        </div>
-                      )}
-                      
-                      {recipe.why_this_recipe && (
-                        <div className="recipe-why">
-                          <h5>🤔 Why This Recipe:</h5>
-                          <p>{recipe.why_this_recipe}</p>
-                        </div>
-                      )}
+                    ))
+                  ) : (
+                    <div className="recipe-text">
+                      <p>{recipes.recipes || 'No recipes generated'}</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             )}
           </div>
-        )}
+        }
         
         <div className="features-section">
           <div className="feature-card">
             <h3>🔍 Real-time Analysis</h3>
-            <p>Instant food detection and nutrition analysis powered by advanced AI.</p>
+            <p>Voice-controlled food detection and nutrition analysis powered by AI.</p>
           </div>
           <div className="feature-card">
-            <h3>🍎 Quality Assessment</h3>
-            <p>Get detailed quality insights and freshness recommendations.</p>
+            <h3>🎤 Voice Commands</h3>
+            <p>Fully accessible through voice commands and keyboard navigation.</p>
           </div>
           <div className="feature-card">
-            <h3>📱 Mobile Optimized</h3>
-            <p>Perfect camera interface for on-the-go food scanning.</p>
+            <h3>📱 Accessibility First</h3>
+            <p>Designed for blind and visually impaired users with comprehensive audio feedback.</p>
           </div>
         </div>
       </main>
