@@ -1,6 +1,6 @@
-# SnackOverflow 🍌
+# Groqcessible
 
-SnackOverflow is an AI-powered food analysis application designed with **accessibility first** in mind. Using computer vision and AI analysis powered by Groq, the app helps users make informed decisions about produce quality and nutrition. Now fully accessible for blind and visually impaired users through comprehensive voice commands, audio feedback, and screen reader support.
+Groqcessible is an AI-powered food analysis application designed with **accessibility first** in mind. Using computer vision and AI analysis powered by Groq, the app helps users make informed decisions about produce quality and nutrition. Now fully accessible for blind and visually impaired users through comprehensive voice commands, audio feedback, and screen reader support.
 
 ## 🌟 Accessibility Features
 
