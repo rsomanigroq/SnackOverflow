@@ -19,6 +19,18 @@ CORS(app)  # Enable CORS for frontend integration
 # Initialize database tables on startup
 create_tables()
 
+# Voice command mappings for accessibility
+VOICE_COMMANDS = {
+    "analyze": ["analyze", "scan", "check food", "examine", "process image"],
+    "camera": ["camera", "take photo", "use camera"],
+    "capture": ["capture", "take picture", "snap photo"],
+    "upload": ["upload", "select file", "choose image", "browse"],
+    "history": ["history", "show history", "recent scans", "past analyses"],
+    "help": ["help", "tutorial", "how to use", "instructions", "guide"],
+    "reset": ["reset", "clear", "start over", "cancel"],
+    "repeat": ["repeat", "say again", "read again"]
+}
+
 def encode_image_to_base64(image_path):
     """Convert image file to base64 string"""
     try:
@@ -591,6 +603,142 @@ def generate_recipes():
     except Exception as e:
         print(f"Server error in recipe generation: {str(e)}")
         return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/transcribe-audio', methods=['POST'])
+def transcribe_audio_endpoint():
+    """API endpoint to transcribe audio using Groq Whisper"""
+    try:
+        # Check if audio file is in request
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+        
+        file = request.files['audio']
+        if file.filename == '':
+            return jsonify({'error': 'No audio file selected'}), 400
+        
+        # Get API key from environment variable
+        api_key = os.getenv('GROQ_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'GROQ_API_KEY not configured'}), 500
+        
+        # Save uploaded audio file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            file.save(temp_file.name)
+            temp_path = temp_file.name
+        
+        try:
+            print(f"Transcribing audio: {file.filename}")
+            
+            # Initialize Groq client
+            client = Groq(api_key=api_key)
+            
+            # Transcribe using Groq Whisper
+            with open(temp_path, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    file=audio_file,
+                    model="whisper-large-v3-turbo",
+                    response_format="text",
+                    language="en"
+                )
+            
+            transcribed_text = transcription
+            print(f"Transcription result: {transcribed_text}")
+            
+            # Analyze for voice commands
+            voice_command = analyze_voice_command(transcribed_text)
+            
+            return jsonify({
+                'transcription': transcribed_text,
+                'voice_command': voice_command,
+                'success': True
+            })
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+                
+    except Exception as e:
+        print(f"Transcription error: {str(e)}")
+        return jsonify({'error': f'Transcription error: {str(e)}'}), 500
+
+def analyze_voice_command(text):
+    """Analyze transcribed text for voice commands"""
+    if not text:
+        return None
+    
+    text_lower = text.lower().strip()
+    
+    # Check for voice commands
+    for command, variations in VOICE_COMMANDS.items():
+        for variation in variations:
+            if variation in text_lower:
+                return {
+                    'command': command,
+                    'confidence': 'high',
+                    'original_text': text,
+                    'matched_phrase': variation
+                }
+    
+    # Check for generic navigation commands
+    if any(word in text_lower for word in ['go to', 'navigate', 'open', 'show me']):
+        return {
+            'command': 'navigate',
+            'confidence': 'medium',
+            'original_text': text,
+            'matched_phrase': 'navigation request'
+        }
+    
+    return {
+        'command': 'unknown',
+        'confidence': 'low',
+        'original_text': text,
+        'matched_phrase': None
+    }
+
+@app.route('/voice-tutorial', methods=['GET'])
+def get_voice_tutorial():
+    """Provide voice tutorial and available commands"""
+    tutorial = {
+        'welcome_message': "Welcome to SnackOverflow's voice interface! Here are the commands you can use:",
+        'commands': {
+            'Food Analysis': [
+                "Say 'analyze' or 'scan' to analyze food in your current image",
+                "Say 'camera' to switch to camera mode",
+                "Say 'upload' to select an image file"
+            ],
+            'Navigation': [
+                "Say 'history' to view your scan history",
+                "Say 'help' for this tutorial",
+                "Say 'reset' to start over"
+            ],
+            'Audio Controls': [
+                "Say 'repeat' to hear the last response again",
+                "All analysis results are automatically read aloud"
+            ]
+        },
+        'tips': [
+            "Speak clearly and wait for the beep",
+            "Commands work in any order",
+            "You can combine commands like 'upload and analyze'",
+            "The app will announce what it's doing"
+        ]
+    }
+    
+    return jsonify(tutorial)
+
+@app.route('/accessibility-status', methods=['GET'])
+def get_accessibility_status():
+    """Get current accessibility features status"""
+    return jsonify({
+        'voice_commands_enabled': True,
+        'audio_feedback_enabled': True,
+        'keyboard_navigation_enabled': True,
+        'screen_reader_support': True,
+        'available_commands': list(VOICE_COMMANDS.keys()),
+        'whisper_model': 'whisper-large-v3-turbo',
+        'tts_model': 'playai-tts'
+    })
 
 @app.route('/health', methods=['GET'])
 def health_check():
