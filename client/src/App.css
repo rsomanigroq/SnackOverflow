@@ -1227,14 +1227,29 @@ input:focus,
 
 /* Recipe results styling */
 .recipes-section {
-  margin-top: 2rem;
-  padding: 2rem;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow-medium);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;        /* so the close button can abs-position */
+  margin: 2rem 0;
+  padding: 1.5rem;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.close-recipes {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #4a5568;
+  transition: color 0.2s;
+}
+
+.close-recipes:hover {
+  color: #2d3748;
 }
 
 .recipes-section h3 {
