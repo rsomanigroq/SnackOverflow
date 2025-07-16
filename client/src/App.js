@@ -120,6 +120,10 @@ function App() {
             console.log('⚡ Local command executed:', localCommand);
             executeVoiceCommand(localCommand);
             setIsListening(false);
+            // Hide transcript quickly after local command execution
+            setTimeout(() => {
+              setVoiceTranscript('');
+            }, 1500);
             return;
           }
         };
@@ -192,14 +196,18 @@ function App() {
       const result = await response.json();
       setVoiceTranscript(result.transcription);
       
-      // Auto-hide transcript after 4 seconds
-      setTimeout(() => {
-        setVoiceTranscript('');
-      }, 4000);
-      
       // Execute voice command
       if (result.voice_command && result.voice_command.command !== 'unknown') {
         await executeVoiceCommand(result.voice_command);
+        // Hide transcript immediately after successful command execution
+        setTimeout(() => {
+          setVoiceTranscript('');
+        }, 1500); // 1.5 seconds to briefly show what was recognized
+      } else {
+        // Hide transcript after 2 seconds for unrecognized commands
+        setTimeout(() => {
+          setVoiceTranscript('');
+        }, 2000);
       }
       
     } catch (error) {
@@ -815,8 +823,8 @@ function App() {
       
       <header className="App-header">
         <div className="header-left">
-          <h1>🍌 SnackOverflow</h1>
-          <p>Accessible AI-powered food analysis</p>
+                      <h1>🤖 Groqcessible</h1>
+                      <p>Groq-powered accessible food intelligence</p>
         </div>
         
         <div className="header-controls">
@@ -1322,7 +1330,7 @@ function App() {
       </main>
 
       <footer className="App-footer">
-        <p>&copy; 2024 SnackOverflow. Accessible AI-powered food analysis 🚀</p>
+        <p>&copy; 2024 Groqcessible. Powered by Groq AI for accessible food intelligence 🚀</p>
       </footer>
     </div>
   );
