@@ -27,6 +27,8 @@ function App() {
   // References for voice recording
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const voiceTimeoutRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
 
   // Voice commands reference for accessibility
   const voiceCommands = useRef({
@@ -39,6 +41,29 @@ function App() {
     reset: ['reset', 'clear', 'start over', 'cancel'],
     repeat: ['repeat', 'say again', 'read again']
   });
+
+  // Local voice command recognition for faster response
+  const recognizeLocalCommand = (text) => {
+    if (!text) return null;
+    
+    const textLower = text.toLowerCase().trim();
+    
+    // Quick keyword matching for instant response
+    for (const [command, variations] of Object.entries(voiceCommands.current)) {
+      for (const variation of variations) {
+        if (textLower.includes(variation)) {
+          return {
+            command,
+            confidence: 'high',
+            matched_phrase: variation,
+            source: 'local'
+          };
+        }
+      }
+    }
+    
+    return null;
+  };
 
   // Announce text for screen readers and voice feedback
   const announceText = async (text) => {
@@ -70,11 +95,43 @@ function App() {
     }
   };
 
-  // Start voice recording
+  // Start voice recording with dual approach (browser + Groq)
   const startVoiceRecording = async () => {
     try {
       setIsListening(true);
       
+      // Try browser speech recognition first for instant response
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        speechRecognitionRef.current = new SpeechRecognition();
+        speechRecognitionRef.current.continuous = false;
+        speechRecognitionRef.current.interimResults = false;
+        speechRecognitionRef.current.lang = 'en-US';
+        
+        speechRecognitionRef.current.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          console.log('🚀 Browser recognition (fast):', transcript);
+          setVoiceTranscript(transcript);
+          
+          // Quick local command recognition
+          const localCommand = recognizeLocalCommand(transcript);
+          if (localCommand) {
+            console.log('⚡ Local command executed:', localCommand);
+            executeVoiceCommand(localCommand);
+            setIsListening(false);
+            return;
+          }
+        };
+        
+        speechRecognitionRef.current.start();
+        
+        // Fallback timeout
+        voiceTimeoutRef.current = setTimeout(() => {
+          stopVoiceRecording();
+        }, 3000);
+      }
+      
+      // Parallel Groq processing for accuracy (fallback)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
@@ -84,19 +141,15 @@ function App() {
       };
 
       mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        await processVoiceCommand(audioBlob);
+        // Only process with Groq if browser recognition failed
+        if (isListening) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+          await processVoiceCommand(audioBlob);
+        }
         stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorderRef.current.start();
-      
-      // Auto-stop after 5 seconds
-      setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          stopVoiceRecording();
-        }
-      }, 5000);
       
     } catch (error) {
       console.error('Error starting voice recording:', error);
@@ -109,10 +162,16 @@ function App() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
+    if (speechRecognitionRef.current) {
+      speechRecognitionRef.current.stop();
+    }
+    if (voiceTimeoutRef.current) {
+      clearTimeout(voiceTimeoutRef.current);
+    }
     setIsListening(false);
   };
 
-  // Process voice command
+  // Process voice command with optimized request
   const processVoiceCommand = async (audioBlob) => {
     try {
       const formData = new FormData();
@@ -121,6 +180,8 @@ function App() {
       const response = await fetch('http://localhost:5000/transcribe-audio', {
         method: 'POST',
         body: formData,
+        // Add timeout for faster failure detection
+        signal: AbortSignal.timeout(8000), // 8 second timeout
       });
 
       if (!response.ok) {
@@ -164,8 +225,12 @@ function App() {
         if (mode === 'camera') {
           handleCapture();
         } else {
-          // Switch to camera mode first, then capture on next command
+          // Switch to camera mode and auto-capture after camera initializes
           setMode('camera');
+          // Wait for camera to initialize, then auto-capture
+          setTimeout(() => {
+            handleCapture();
+          }, 2000); // 2-second delay for camera initialization
         }
         break;
         
@@ -243,6 +308,12 @@ function App() {
       if (event.code === 'Space' && voiceCommandsEnabled && !isListening) {
         event.preventDefault();
         startVoiceRecording();
+      }
+      
+      // Stop recording with spacebar release or ESC
+      if ((event.code === 'Escape' || event.code === 'Enter') && isListening) {
+        event.preventDefault();
+        stopVoiceRecording();
       }
       
       // Quick navigation keys
@@ -763,7 +834,7 @@ function App() {
         {/* Accessibility instructions */}
         <div className="accessibility-instructions" aria-label="Keyboard shortcuts">
           <p className="sr-only">
-            Keyboard shortcuts: Spacebar for voice commands, Alt+1 for upload, Alt+2 for camera, 
+            Keyboard shortcuts: Spacebar for voice commands (press ESC or Enter to stop early), Alt+1 for upload, Alt+2 for camera, 
             Alt+3 to analyze, Alt+4 for history, Alt+H for help
           </p>
         </div>
