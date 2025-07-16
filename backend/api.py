@@ -8,7 +8,7 @@ from groq import Groq
 from dotenv import load_dotenv
 import subprocess
 import platform
-from database import create_tables, save_food_analysis, get_recent_analyses
+from database import create_tables, save_food_analysis, get_recent_analyses, get_food_wrap_data
 
 # Load environment variables
 load_dotenv()
@@ -648,6 +648,120 @@ def get_recent_food_analyses():
     except Exception as e:
         print(f"Error fetching recent analyses: {e}")
         return jsonify({'error': 'Failed to fetch analyses'}), 500
+
+@app.route('/food-wrap', methods=['GET'])
+def get_food_wrap():
+    """Generate food scanning wrap data"""
+    try:
+        # Get number of days from query parameter (default 30)
+        days = request.args.get('days', 30, type=int)
+        
+        # Get wrap data from database
+        wrap_data = get_food_wrap_data(days)
+        
+        if not wrap_data:
+            return jsonify({
+                'error': 'No data available for the specified period',
+                'period': f'{days} days'
+            }), 404
+        
+        # Generate additional insights using Groq
+        api_key = os.getenv('GROQ_API_KEY')
+        if api_key:
+            insights = generate_wrap_insights(wrap_data, api_key)
+            if insights:
+                wrap_data['ai_insights'] = insights
+        
+        return jsonify(wrap_data)
+        
+    except Exception as e:
+        print(f"Error generating food wrap: {e}")
+        return jsonify({'error': 'Failed to generate food wrap'}), 500
+
+def generate_wrap_insights(wrap_data, groq_api_key):
+    """Generate AI insights for the food wrap using Groq"""
+    
+    client = Groq(api_key=groq_api_key)
+    
+    try:
+        # Create a summary of the user's data
+        summary = f"""
+        User's Food Scanning Summary for {wrap_data['period']}:
+        - Total scans: {wrap_data['total_scans']}
+        - Unique foods: {wrap_data['unique_foods']}
+        - Top food: {wrap_data['top_food']['name']} ({wrap_data['top_food']['count']} times)
+        - Total calories analyzed: {wrap_data['total_calories']}
+        - Average freshness level: {wrap_data['avg_freshness']}/10
+        - Purchase success rate: {wrap_data['buy_ratio']}%
+        - Food categories: {wrap_data['food_categories']['fruits']} fruits, {wrap_data['food_categories']['vegetables']} vegetables
+        - Longest scanning streak: {wrap_data['consecutive_days']} days
+        - Peak scanning hour: {wrap_data['peak_hour']}:00
+        """
+        
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Based on this food scanning data, provide personalized insights and fun facts in JSON format:
+
+{summary}
+
+Generate a JSON response with the following structure:
+{{
+  "personality_type": "One of: Health Guru, Adventurous Eater, Quality Inspector, Calorie Counter, Variety Seeker",
+  "fun_facts": [
+    "Interesting fact about their scanning habits",
+    "Another fun observation",
+    "Third interesting insight"
+  ],
+  "achievements": [
+    "Achievement they've unlocked",
+    "Another achievement"
+  ],
+  "recommendations": [
+    "Personalized recommendation based on their data",
+    "Another helpful suggestion"
+  ],
+  "wrap_title": "A fun, personalized title for their wrap (like 'Your Fruity Adventure' or 'The Quality Detective')",
+  "health_score": 85,
+  "variety_score": 92
+}}
+
+Make it fun, engaging, and personalized! Focus on positive insights and interesting patterns."""
+                }
+            ],
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
+            max_tokens=800
+        )
+        
+        response_content = response.choices[0].message.content
+        
+        # Parse JSON response
+        try:
+            # Try to find JSON in the response
+            response_text = response_content.strip()
+            
+            if response_text.startswith('{') and response_text.endswith('}'):
+                return json.loads(response_text)
+            
+            # If not, try to extract JSON from the text
+            start_idx = response_text.find('{')
+            end_idx = response_text.rfind('}')
+            
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                json_str = response_text[start_idx:end_idx + 1]
+                return json.loads(json_str)
+            
+            return None
+            
+        except json.JSONDecodeError as e:
+            print(f"Error parsing insights JSON: {e}")
+            return None
+        
+    except Exception as e:
+        print(f"Error generating wrap insights: {e}")
+        return None
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000) 
