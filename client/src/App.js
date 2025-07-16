@@ -846,6 +846,9 @@ function App() {
             className="history-button"
             onClick={() => {
               setShowHistory(!showHistory);
+              if (!showHistory) {
+                resetAnalysis();
+              }
             }}
             aria-label={showHistory ? 'Hide history' : 'Show history'}
             title="Alt+4 to toggle history"
@@ -1220,6 +1223,13 @@ function App() {
             {/* Recipe results display */}
             {recipes && (
               <div className="recipes-section" aria-live="polite">
+                <button
+                  className="close-recipes"
+                  onClick={() => setRecipes(null)}
+                  aria-label="Close recipes"
+                >
+                  ×
+                </button>
                 <h3>🍳 Generated Recipes</h3>
                 
                 <div className="recipes-content">
