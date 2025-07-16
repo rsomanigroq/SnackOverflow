@@ -1163,37 +1163,72 @@ function App() {
             {recipes && (
               <div className="recipes-section" aria-live="polite">
                 <h3>🍳 Generated Recipes</h3>
+                
                 <div className="recipes-content">
                   {Array.isArray(recipes.recipes) ? (
                     recipes.recipes.map((recipe, index) => (
-                      <div key={index} className="recipe-card">
-                        <h4>{recipe.name || `Recipe ${index + 1}`}</h4>
-                        <p>{recipe.description || recipe}</p>
-                        {recipe.ingredients && (
-                          <div className="ingredients">
-                            <strong>Ingredients:</strong>
+                      <div key={index} className="recipe-card glow-effect">
+                        <div className="recipe-header">
+                          <h4>{recipe.name || `Recipe ${index + 1}`}</h4>
+                          <div className="recipe-meta">
+                            {recipe.cooking_time && <span>⏱️ {recipe.cooking_time}</span>}
+                            {recipe.difficulty && <span>📊 {recipe.difficulty}</span>}
+                            {recipe.calories_per_serving && <span>🔥 {recipe.calories_per_serving} cal</span>}
+                            {recipe.servings && <span>👥 {recipe.servings} servings</span>}
+                          </div>
+                        </div>
+                        
+                        <div className="recipe-description">
+                          {recipe.description || (typeof recipe === 'string' ? recipe : 'Recipe description not available')}
+                        </div>
+                        
+                        {recipe.ingredients && Array.isArray(recipe.ingredients) && (
+                          <div className="recipe-ingredients">
+                            <h5>🥕 Ingredients</h5>
                             <ul>
                               {recipe.ingredients.map((ingredient, i) => (
-                                <li key={i}>{ingredient}</li>
+                                <li key={i}>
+                                  {typeof ingredient === 'string' ? ingredient : 
+                                    <span>
+                                      <strong>{ingredient.item || 'Unknown'}</strong> - {ingredient.amount || 'As needed'}
+                                      {ingredient.notes && <span className="ingredient-notes"> ({ingredient.notes})</span>}
+                                    </span>
+                                  }
+                                </li>
                               ))}
                             </ul>
                           </div>
                         )}
-                        {recipe.instructions && (
-                          <div className="instructions">
-                            <strong>Instructions:</strong>
+                        
+                        {recipe.instructions && Array.isArray(recipe.instructions) && (
+                          <div className="recipe-instructions">
+                            <h5>👨‍🍳 Instructions</h5>
                             <ol>
                               {recipe.instructions.map((step, i) => (
-                                <li key={i}>{step}</li>
+                                <li key={i}>{typeof step === 'string' ? step : 'Step instruction not available'}</li>
                               ))}
                             </ol>
+                          </div>
+                        )}
+                        
+                        {recipe.tips && (
+                          <div className="recipe-tips">
+                            <h5>💡 Tips</h5>
+                            <p>{recipe.tips}</p>
+                          </div>
+                        )}
+                        
+                        {recipe.why_this_recipe && (
+                          <div className="recipe-why">
+                            <h5>🤔 Why This Recipe?</h5>
+                            <p>{recipe.why_this_recipe}</p>
                           </div>
                         )}
                       </div>
                     ))
                   ) : (
                     <div className="recipe-text">
-                      <p>{recipes.recipes || 'No recipes generated'}</p>
+                      <p>{typeof recipes.recipes === 'string' ? recipes.recipes : 'No recipes generated'}</p>
                     </div>
                   )}
                 </div>
