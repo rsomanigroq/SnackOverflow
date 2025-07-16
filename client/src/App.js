@@ -10,11 +10,14 @@ function App() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showWrap, setShowWrap] = useState(false); // New state for wrap view
   const [voiceEnabled, setVoiceEnabled] = useState(true); // Voice toggle state
   const [hideCaptureSection, setHideCaptureSection] = useState(false); // New state to control capture section visibility
   const [scanHistory, setScanHistory] = useState([]);
   const [recipes, setRecipes] = useState(null);
   const [generatingRecipes, setGeneratingRecipes] = useState(false);
+  const [wrapData, setWrapData] = useState(null); // New state for wrap data
+  const [loadingWrap, setLoadingWrap] = useState(false); // Loading state for wrap
 
   // Effect to speak voice script when analysis results are set
   useEffect(() => {
@@ -380,6 +383,27 @@ function App() {
     // Add code to send the selected items to the backend here
   };
 
+  // Function to load wrap data
+  const loadWrapData = async (days = 30) => {
+    setLoadingWrap(true);
+    try {
+      const response = await fetch(`http://localhost:5000/food-wrap?days=${days}`);
+      if (response.ok) {
+        const data = await response.json();
+        setWrapData(data);
+        setShowWrap(true);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to load wrap data');
+      }
+    } catch (error) {
+      console.error('Error loading wrap data:', error);
+      alert('Failed to load wrap data. Please try again.');
+    } finally {
+      setLoadingWrap(false);
+    }
+  };
+
   return (
     <div className="App">
       {/* Floating particles background */}
@@ -403,16 +427,34 @@ function App() {
             <p>AI-Powered Food Analysis & Quality Assessment</p>
           </div>
         </div>
-        <button
-          className="history-button glow-effect"
-          onClick={() => setShowHistory(!showHistory)}
-        >
-          📋 {showHistory ? 'Hide' : 'Show'} History
-        </button>
+        <div className="header-buttons">
+          <button
+            className="wrap-button glow-effect"
+            onClick={() => loadWrapData(30)}
+            disabled={loadingWrap}
+          >
+            🎵 {loadingWrap ? 'Loading...' : 'My Food Wrap'}
+          </button>
+          <button
+            className="history-button glow-effect"
+            onClick={() => {
+              setShowHistory(!showHistory);
+              setShowWrap(false);
+            }}
+          >
+            📋 {showHistory ? 'Hide' : 'Show'} History
+          </button>
+        </div>
       </header>
 
       <main className="App-main">
-        {!showHistory ? (
+        {showWrap ? (
+          <FoodWrap 
+            wrapData={wrapData} 
+            onClose={() => setShowWrap(false)}
+            onChangePeriod={loadWrapData}
+          />
+        ) : !showHistory ? (
           <>
             <div className="upload-container" style={{ display: hideCaptureSection ? 'none' : 'block' }}>
               <div className="upload-area">
@@ -786,6 +828,431 @@ function App() {
       <footer className="App-footer">
         <p>&copy; 2025 SnackOverflow. Real-time quality assessment powered by Groq 🚀</p>
       </footer>
+    </div>
+  );
+}
+
+// Food Wrap Component
+function FoodWrap({ wrapData, onClose, onChangePeriod }) {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [selectedPeriod, setSelectedPeriod] = useState(30);
+
+  if (!wrapData) {
+    return (
+      <div className="wrap-container">
+        <div className="wrap-loading">
+          <h2>🎵 Generating Your Food Wrap...</h2>
+          <div className="wrap-spinner"></div>
+        </div>
+      </div>
+    );
+  }
+
+  const slides = [
+    'intro',
+    'stats',
+    'top-food',
+    'categories',
+    'quality',
+    'habits',
+    'achievements',
+    'insights'
+  ];
+
+  const nextSlide = () => {
+    setCurrentSlide((prev) => (prev + 1) % slides.length);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  const handlePeriodChange = (days) => {
+    setSelectedPeriod(days);
+    onChangePeriod(days);
+    setCurrentSlide(0);
+  };
+
+  const renderSlide = () => {
+    const slide = slides[currentSlide];
+    const { ai_insights } = wrapData;
+
+    switch (slide) {
+      case 'intro':
+        return (
+          <div className="wrap-slide intro-slide">
+            <div className="wrap-slide-content">
+              <h1>🎵 Your Food Wrap</h1>
+              <h2>{ai_insights?.wrap_title || 'Your Food Journey'}</h2>
+              <p>Let's explore your {wrapData.period} of food discoveries!</p>
+              <div className="wrap-period-selector">
+                <button 
+                  className={selectedPeriod === 7 ? 'active' : ''} 
+                  onClick={() => handlePeriodChange(7)}
+                >
+                  7 Days
+                </button>
+                <button 
+                  className={selectedPeriod === 30 ? 'active' : ''} 
+                  onClick={() => handlePeriodChange(30)}
+                >
+                  30 Days
+                </button>
+                <button 
+                  className={selectedPeriod === 90 ? 'active' : ''} 
+                  onClick={() => handlePeriodChange(90)}
+                >
+                  90 Days
+                </button>
+              </div>
+              <div className="personality-badge">
+                <span className="personality-label">Your Food Personality:</span>
+                <span className="personality-type">{ai_insights?.personality_type || 'Food Explorer'}</span>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'stats':
+        return (
+          <div className="wrap-slide stats-slide">
+            <div className="wrap-slide-content">
+              <h2>📊 Your Numbers</h2>
+              <div className="stats-grid">
+                <div className="stat-card pulse-animation">
+                  <span className="stat-number">{wrapData.total_scans}</span>
+                  <span className="stat-label">Total Scans</span>
+                </div>
+                <div className="stat-card pulse-animation">
+                  <span className="stat-number">{wrapData.unique_foods}</span>
+                  <span className="stat-label">Unique Foods</span>
+                </div>
+                <div className="stat-card pulse-animation">
+                  <span className="stat-number">{wrapData.total_calories.toLocaleString()}</span>
+                  <span className="stat-label">Calories Analyzed</span>
+                </div>
+                <div className="stat-card pulse-animation">
+                  <span className="stat-number">{wrapData.consecutive_days}</span>
+                  <span className="stat-label">Day Streak</span>
+                </div>
+              </div>
+              <div className="health-scores">
+                <div className="score-circle">
+                  <div className="score-inner">
+                    <span className="score-number">{ai_insights?.health_score || 85}</span>
+                    <span className="score-label">Health Score</span>
+                  </div>
+                </div>
+                <div className="score-circle">
+                  <div className="score-inner">
+                    <span className="score-number">{ai_insights?.variety_score || 92}</span>
+                    <span className="score-label">Variety Score</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'top-food':
+        return (
+          <div className="wrap-slide top-food-slide">
+            <div className="wrap-slide-content">
+              <h2>👑 Your Food Champion</h2>
+              <div className="top-food-display">
+                <div className="food-crown">👑</div>
+                <h3>{wrapData.top_food.name}</h3>
+                <p>Scanned {wrapData.top_food.count} times</p>
+                <div className="food-frequency-bars">
+                  {Object.entries(wrapData.food_frequency).slice(0, 5).map(([food, count], index) => (
+                    <div key={food} className="frequency-bar">
+                      <span className="food-name">{food}</span>
+                      <div className="bar-container">
+                        <div 
+                          className="bar-fill" 
+                          style={{ 
+                            width: `${(count / wrapData.top_food.count) * 100}%`,
+                            animationDelay: `${index * 0.2}s`
+                          }}
+                        ></div>
+                      </div>
+                      <span className="count">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'categories':
+        return (
+          <div className="wrap-slide categories-slide">
+            <div className="wrap-slide-content">
+              <h2>🍎 Your Food Universe</h2>
+              <div className="category-chart">
+                <div className="donut-chart">
+                  <svg viewBox="0 0 200 200" className="donut-svg">
+                    <circle cx="100" cy="100" r="80" fill="none" stroke="#e0e0e0" strokeWidth="20"/>
+                    <circle 
+                      cx="100" 
+                      cy="100" 
+                      r="80" 
+                      fill="none" 
+                      stroke="#ff6b6b" 
+                      strokeWidth="20"
+                      strokeDasharray={`${(wrapData.food_categories.fruits / wrapData.total_scans) * 502.4} 502.4`}
+                      transform="rotate(-90 100 100)"
+                      className="animated-stroke"
+                    />
+                    <circle 
+                      cx="100" 
+                      cy="100" 
+                      r="80" 
+                      fill="none" 
+                      stroke="#4ecdc4" 
+                      strokeWidth="20"
+                      strokeDasharray={`${(wrapData.food_categories.vegetables / wrapData.total_scans) * 502.4} 502.4`}
+                      strokeDashoffset={`-${(wrapData.food_categories.fruits / wrapData.total_scans) * 502.4}`}
+                      transform="rotate(-90 100 100)"
+                      className="animated-stroke"
+                    />
+                  </svg>
+                  <div className="donut-center">
+                    <span className="center-number">{wrapData.total_scans}</span>
+                    <span className="center-label">Total</span>
+                  </div>
+                </div>
+                <div className="category-legends">
+                  <div className="legend-item">
+                    <span className="legend-color fruits"></span>
+                    <span>Fruits ({wrapData.food_categories.fruits})</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-color vegetables"></span>
+                    <span>Vegetables ({wrapData.food_categories.vegetables})</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-color other"></span>
+                    <span>Other ({wrapData.food_categories.other})</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'quality':
+        return (
+          <div className="wrap-slide quality-slide">
+            <div className="wrap-slide-content">
+              <h2>✨ Quality Master</h2>
+              <div className="quality-stats">
+                <div className="freshness-gauge">
+                  <div className="gauge-container">
+                    <div className="gauge-background"></div>
+                    <div 
+                      className="gauge-fill" 
+                      style={{ transform: `rotate(${(wrapData.avg_freshness / 10) * 180 - 90}deg)` }}
+                    ></div>
+                    <div className="gauge-center">
+                      <span className="gauge-number">{wrapData.avg_freshness}</span>
+                      <span className="gauge-label">Avg Freshness</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="buy-ratio-display">
+                  <div className="ratio-circle">
+                    <svg viewBox="0 0 120 120" className="ratio-svg">
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="#e0e0e0" strokeWidth="8"/>
+                      <circle 
+                        cx="60" 
+                        cy="60" 
+                        r="50" 
+                        fill="none" 
+                        stroke="#28a745" 
+                        strokeWidth="8"
+                        strokeDasharray={`${(wrapData.buy_ratio / 100) * 314} 314`}
+                        transform="rotate(-90 60 60)"
+                        className="animated-stroke"
+                      />
+                    </svg>
+                    <div className="ratio-center">
+                      <span className="ratio-number">{wrapData.buy_ratio}%</span>
+                      <span className="ratio-label">Buy Rate</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'habits':
+        return (
+          <div className="wrap-slide habits-slide">
+            <div className="wrap-slide-content">
+              <h2>⏰ Your Habits</h2>
+              <div className="habits-content">
+                <div className="peak-time">
+                  <h3>Peak Scanning Time</h3>
+                  <div className="clock-display">
+                    <div className="clock">
+                      <div className="clock-face">
+                        <div 
+                          className="clock-hand" 
+                          style={{ transform: `rotate(${(wrapData.peak_hour / 12) * 360}deg)` }}
+                        ></div>
+                      </div>
+                      <span className="time-text">{wrapData.peak_hour}:00</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="fun-facts">
+                  <h3>🎉 Fun Facts</h3>
+                  <ul>
+                    {ai_insights?.fun_facts?.map((fact, index) => (
+                      <li key={index} className="fun-fact-item">
+                        <span className="fact-emoji">🌟</span>
+                        {fact}
+                      </li>
+                    )) || [
+                      <li key="default" className="fun-fact-item">
+                        <span className="fact-emoji">🌟</span>
+                        You've developed quite the eye for food quality!
+                      </li>
+                    ]}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'achievements':
+        return (
+          <div className="wrap-slide achievements-slide">
+            <div className="wrap-slide-content">
+              <h2>🏆 Achievements Unlocked</h2>
+              <div className="achievements-grid">
+                {ai_insights?.achievements?.map((achievement, index) => (
+                  <div key={index} className="achievement-card">
+                    <div className="achievement-icon">🏆</div>
+                    <h4>{achievement}</h4>
+                  </div>
+                )) || [
+                  <div key="scanner" className="achievement-card">
+                    <div className="achievement-icon">📸</div>
+                    <h4>Food Scanner</h4>
+                    <p>Scanned your first food item</p>
+                  </div>,
+                  <div key="explorer" className="achievement-card">
+                    <div className="achievement-icon">🌍</div>
+                    <h4>Food Explorer</h4>
+                    <p>Tried {wrapData.unique_foods} different foods</p>
+                  </div>
+                ]}
+                {wrapData.puns_received > 0 && (
+                  <div className="achievement-card">
+                    <div className="achievement-icon">😄</div>
+                    <h4>Pun Collector</h4>
+                    <p>Collected {wrapData.puns_received} food puns</p>
+                  </div>
+                )}
+                {wrapData.consecutive_days >= 7 && (
+                  <div className="achievement-card">
+                    <div className="achievement-icon">🔥</div>
+                    <h4>Streak Master</h4>
+                    <p>{wrapData.consecutive_days} day scanning streak</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'insights':
+        return (
+          <div className="wrap-slide insights-slide">
+            <div className="wrap-slide-content">
+              <h2>💡 AI Insights</h2>
+              <div className="insights-content">
+                <div className="recommendations">
+                  <h3>🎯 Recommendations</h3>
+                  <ul>
+                    {ai_insights?.recommendations?.map((rec, index) => (
+                      <li key={index} className="recommendation-item">
+                        <span className="rec-emoji">💡</span>
+                        {rec}
+                      </li>
+                    )) || [
+                      <li key="default" className="recommendation-item">
+                        <span className="rec-emoji">💡</span>
+                        Keep exploring new foods to expand your palate!
+                      </li>
+                    ]}
+                  </ul>
+                </div>
+                <div className="wrap-summary">
+                  <h3>📝 Your Journey</h3>
+                  <p>
+                    In the past {wrapData.period}, you've scanned {wrapData.total_scans} food items, 
+                    discovered {wrapData.unique_foods} unique foods, and maintained an impressive 
+                    {wrapData.avg_freshness}/10 freshness score. Keep up the great work!
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return <div>Slide not found</div>;
+    }
+  };
+
+  return (
+    <div className="wrap-container">
+      <div className="wrap-header">
+        <button className="wrap-close-btn" onClick={onClose}>
+          ← Back
+        </button>
+        <div className="wrap-progress">
+          <div className="progress-dots">
+            {slides.map((_, index) => (
+              <div 
+                key={index} 
+                className={`progress-dot ${index === currentSlide ? 'active' : ''} ${index < currentSlide ? 'completed' : ''}`}
+                onClick={() => setCurrentSlide(index)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="wrap-content">
+        {renderSlide()}
+      </div>
+
+      <div className="wrap-navigation">
+        <button 
+          className="nav-btn prev-btn" 
+          onClick={prevSlide}
+          disabled={currentSlide === 0}
+        >
+          ← Previous
+        </button>
+        <span className="slide-counter">
+          {currentSlide + 1} of {slides.length}
+        </span>
+        <button 
+          className="nav-btn next-btn" 
+          onClick={nextSlide}
+          disabled={currentSlide === slides.length - 1}
+        >
+          Next →
+        </button>
+      </div>
     </div>
   );
 }
